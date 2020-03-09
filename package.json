@@ -1,0 +1,15 @@
+{
+  "name": "zoopla-scrape",
+  "version": "1.0.0",
+  "description": "",
+  "main": "scraper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Kian Mayne",
+  "license": "UNLICENCED",
+  "dependencies": {
+    "jsdom": "^16.2.0",
+    "node-fetch": "^2.6.0"
+  }
+}
