@@ -17,31 +17,34 @@ const limiter = new Bottleneck({
 });
 const rateLimitedFetch = limiter.wrap(fetch);
 
-async function getMapPage() {
-  const cachedMapPageName = './data/map.html';
-  // Should fetch if file is older than 30 minutes or doesn't exist
-  const shouldFetch = await fs.stat(cachedMapPageName)
-    .then(stat => (new Date() - stat.mtime) > millisIn30Mins)
+async function cached(func, cacheFileName, maxAgeHours) {
+  const maxAgeMillis = maxAgeHours * 60 * 60 * 1000;
+  const fileNeedsUpdate = await fs.stat(cacheFileName)
+    // Check if last modified within max age
+    .then(stat => (new Date() - stat.mtime) > maxAgeMillis)
+    // Non-existent file needs update
     .catch(err => true);
-  if (shouldFetch) {
-    console.info('Fetching map page');
-    const response = await rateLimitedFetch(zooplaSearchURL);
-    const pageText = await response.text();
-    await fs.writeFile(cachedMapPageName, pageText);
-    return pageText;
+  if (fileNeedsUpdate) {
+    const funcResult = await func();
+    await fs.writeFile(cacheFileName, JSON.stringify(funcResult));
+    return funcResult;
   } else {
-    console.info('Using cached map page');
-    return fs.readFile(cachedMapPageName, { encoding: 'utf8' });
+    const fileText = await fs.readFile(cacheFileName, { encoding: 'utf8' });
+    console.log('Parsing file', cacheFileName)
+    return JSON.parse(fileText);
   }
 }
 
+async function getMapPage() {
+  return cached(async () => {
+    console.info('Fetching map page');
+    const response = await rateLimitedFetch(zooplaSearchURL);
+    return response.text();
+  }, './data/map.html', 0.5);
+}
+
 async function getListings() {
-  const cachedListingsName = './data/listings.json';
-  // Should fetch if file is older than 30 minutes or doesn't exist
-  const shouldParse = await fs.stat(cachedListingsName)
-    .then(stat => (new Date() - stat.mtime) > millisIn30Mins)
-    .catch(err => true);
-  if (shouldParse) {
+  return cached(async () => {
     console.info('Parsing map page for listings');
     const dom = new JSDOM(await getMapPage());
     const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));
@@ -49,61 +52,41 @@ async function getListings() {
       scriptElems
       .map(s => s.text)
       .find(s => s.includes('listing_id') && s.includes('var data'));
+    if (!dataScript) {
+      throw new Error('Could not find script containing listing data');
+    }
     const listingArrayRegex = /var data = \{[\s]+(.+\n)+\s+listings: (?<listings>\[.+\])/;
-    const listingArray = JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
-
-    await fs.writeFile(cachedListingsName, JSON.stringify(listingArray));
-    return listingArray;
-  } else {
-    console.info('Using cached listings');
-    const listingsJson = await fs.readFile(cachedListingsName, { encoding: 'utf8' });
-    return JSON.parse(listingsJson);
-  }
+    return JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
+  }, './data/listings.json', 0.5);
 }
 
 async function fetchListingDetailsPage(listingID) {
-  await fs.mkdir('./data/details/', { recursive: true });
-  const cachedListingDetailsName = `./data/details/${listingID}.html`;
-  const shouldFetch = await fs.stat(cachedListingDetailsName)
-    .then(stat => false)
-    .catch(err => true);
-  if (shouldFetch) {
-    console.info('Fetching property details page for ', listingID);
+  await fs.mkdir('./data/details-html/', { recursive: true });
+  return cached(async () => {
+    console.info('Fetching property details page for', listingID);
     const listingUrl = `https://www.zoopla.co.uk/to-rent/details/${listingID}`;
     const response = await rateLimitedFetch(listingUrl);
     if (!response.ok) {
       throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
     }
-    const responseText = await response.text();
-    await fs.writeFile(cachedListingDetailsName, responseText);
-    return responseText;
-  } else {
-    return fs.readFile(cachedListingDetailsName, { encoding: 'utf8' });
-  }
+    return await response.text();
+  }, `./data/details-html/${listingID}.html`, 24);
 }
 
 async function getListingDetailsJson(listingID) {
+  const jsonLDSelector = 'script[type="application/ld+json"]';
   await fs.mkdir('./data/details-json/', { recursive: true });
-  const cachedListingJsonName = `./data/details-json/${listingID}.json`;
-  const shouldParse = await fs.stat(cachedListingJsonName)
-    .then(stat => false)
-    .catch(err => true);
-  if (shouldParse) {
+  return cached(async () => {
     console.info('Parsing property details page for', listingID);
     const listingPageText = await fetchListingDetailsPage(listingID);
     const dom = new JSDOM(listingPageText);
-    const dataElems = Array.from(dom.window.document.querySelectorAll('script[type="application/ld+json"]'))
-      .map(elem => JSON.parse(elem.text)['@graph']);
-    const listingDetails =
-      dataElems.filter(g => g !== undefined)
-        .flat()
-        .find(entry => entry['@type'] === "Residence");
-    await fs.writeFile(cachedListingJsonName, JSON.stringify(listingDetails));
-    return listingDetails;
-  } else {
-    const listingDetailsJson = await fs.readFile(cachedListingJsonName, { encoding: 'utf8' });
-    return JSON.parse(listingDetailsJson);
-  }
+    const jsonLDElems = dom.window.document.querySelectorAll(jsonLDSelector);
+    return Array.from(jsonLDElems)
+      .map(scriptElem => JSON.parse(scriptElem.text)['@graph'])
+      .filter(g => g !== undefined)
+      .flat()
+      .find(entry => entry['@type'] === "Residence");
+  }, `./data/details-json/${listingID}.json`, 24);
 }
 
 async function getDirectionsToWork(latitude, longitude) {
@@ -127,7 +110,7 @@ async function getAugmentedListings() {
 async function main() {
   // Ensure the data directory exists
   await fs.mkdir('./data', { recursive: true });
-  return getAugmentedListings();
+  await getAugmentedListings();
 }
 
 main()
