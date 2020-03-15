@@ -12,6 +12,11 @@ const MAPS_API_KEY = '***REMOVED***';
 
 const mapsClient = new maps.Client();
 
+const limiter = new Bottleneck({
+  minTime: 2000
+});
+const rateLimitedFetch = limiter.wrap(fetch);
+
 async function getMapPage() {
   const cachedMapPageName = './data/map.html';
   // Should fetch if file is older than 30 minutes or doesn't exist
@@ -20,7 +25,7 @@ async function getMapPage() {
     .catch(err => true);
   if (shouldFetch) {
     console.info('Fetching map page');
-    const response = await fetch(zooplaSearchURL);
+    const response = await rateLimitedFetch(zooplaSearchURL);
     const pageText = await response.text();
     await fs.writeFile(cachedMapPageName, pageText);
     return pageText;
@@ -65,7 +70,7 @@ async function fetchListingDetailsPage(listingID) {
   if (shouldFetch) {
     console.info('Fetching property details page for ', listingID);
     const listingUrl = `https://www.zoopla.co.uk/to-rent/details/${listingID}`;
-    const response = await fetch(listingUrl);
+    const response = await rateLimitedFetch(listingUrl);
     if (!response.ok) {
       throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
     }
@@ -115,12 +120,8 @@ async function getDirectionsToWork(latitude, longitude) {
 async function getAugmentedListings() {
   console.info('Retrieving augmented listings');
   const listings = await getListings();
-  const limiter = new Bottleneck({
-    minTime: 2000
-  });
-  const limitedGetAugmentedListing = limiter.wrap(getListingDetailsJson);
   return Promise.all(
-    listings.map(listing => limitedGetAugmentedListing(listing.listing_id)));
+    listings.map(listing => getListingDetailsJson(listing.listing_id)));
 }
 
 async function main() {
