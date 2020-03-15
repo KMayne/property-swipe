@@ -70,7 +70,7 @@ async function fetchListingDetailsPage(listingID) {
       throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
     }
     return await response.text();
-  }, `./data/details-html/${listingID}.html`, 24);
+  }, `./data/details-html/${listingID}.html`, 24 * 7);
 }
 
 async function getListingDetailsJson(listingID) {
@@ -86,7 +86,7 @@ async function getListingDetailsJson(listingID) {
       .filter(g => g !== undefined)
       .flat()
       .find(entry => entry['@type'] === "Residence");
-  }, `./data/details-json/${listingID}.json`, 24);
+  }, `./data/details-json/${listingID}.json`, 24 * 7);
 }
 
 async function getDirectionsToWork(latitude, longitude) {
