@@ -6,9 +6,7 @@ const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const maps = require("@googlemaps/google-maps-services-js");
 
-const zooplaSearchURL = '***REMOVED***';
-const millisIn30Mins = 30 * 60 * 1000;
-const MAPS_API_KEY = '***REMOVED***';
+const secrets = require('./secrets.json');
 
 const mapsClient = new maps.Client();
 
@@ -38,7 +36,7 @@ async function cached(func, cacheFileName, maxAgeHours) {
 async function getMapPage() {
   return cached(async () => {
     console.info('Fetching map page');
-    const response = await rateLimitedFetch(zooplaSearchURL);
+    const response = await rateLimitedFetch(secrets.zooplaSearchURL);
     return response.text();
   }, './data/map.html', 0.5);
 }
@@ -89,28 +87,37 @@ async function getListingDetailsJson(listingID) {
   }, `./data/details-json/${listingID}.json`, 24 * 7);
 }
 
-async function getDirectionsToWork(latitude, longitude) {
-  return (await mapsClient.distancematrix({ params: {
+async function getCommuteTimes(latitude, longitude) {
+  const response = await mapsClient.distancematrix({ params: {
     origins: [`${latitude},${longitude}`],
-    destinations: ['***REMOVED***'],
-    key: MAPS_API_KEY,
-    arrival_time: (new Date(2020, 2, 23, 9)).getTime(),
+    destinations: [secrets.workLocation, secrets.gfLocation],
+    key: secrets.mapsAPIKey,
+    arrival_time: (new Date(2020, 2, 23, 9)).getTime() / 1000,
     mode: 'transit',
     units: 'metric'
-  }})).data;
+  }});
+  const [workCommuteMins, gfCommuteMins] =
+    response.data.rows[0].elements
+    .map(elem => Math.round(elem.duration.value / 60));
+  return { workCommuteMins, gfCommuteMins };
 }
 
-async function getAugmentedListings() {
-  console.info('Retrieving augmented listings');
+async function processZooplaListing(listing) {
+  await fs.mkdir('./data/processed/', { recursive: true });
+
+}
+
+async function getProcessedListings() {
+  console.info('Retrieving processed listings');
   const listings = await getListings();
   return Promise.all(
-    listings.map(listing => getListingDetailsJson(listing.listing_id)));
+    listings.map(listing => processZooplaListing(listing)));
 }
 
 async function main() {
   // Ensure the data directory exists
   await fs.mkdir('./data', { recursive: true });
-  await getAugmentedListings();
+  return await getCommuteTimes('51.526253', '-0.067585');
 }
 
 main()
