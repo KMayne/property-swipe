@@ -4,12 +4,17 @@ const fetch = require('node-fetch');
 const fs = require('fs').promises;
 const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
-const maps = require("@googlemaps/google-maps-services-js");
+const MapsClient = require("@googlemaps/google-maps-services-js").Client;
 const winston = require('winston');
+const MongoClient = require('mongodb').MongoClient;
 
 const secrets = require('./secrets.json');
 
-const mapsClient = new maps.Client();
+const mongoDBName = 'property-swipe'
+
+const mapsClient = new MapsClient();
+const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
+  { useNewUrlParser: true, useUnifiedTopology: true });
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.simple(),
@@ -116,7 +121,7 @@ async function getCommuteTimes(latitude, longitude) {
 async function processZooplaListing(listing) {
   await fs.mkdir('./data/processed/', { recursive: true });
   const listingID = listing.listing_id;
-  cached(async () => {
+  return cached(async () => {
     const [commuteTimes, details] = await Promise.all([
       getCommuteTimes(listing.lat, listing.lon),
       getListingDetails(listingID)
@@ -126,30 +131,52 @@ async function processZooplaListing(listing) {
       .match(priceRegex).groups.price
       .replace(/,/g, ''));
     return {
+      listingID,
       summary: details.name.replace(' to rent', ''),
       price,
       ...commuteTimes,
       locality: details.address.addressLocality,
-      listingID,
       link: getListingURL(listingID),
       photos: details.photo.map(imgObject => imgObject.contentUrl)
-    }
+    };
   }, `./data/processed/${listingID}.json`, 24 * 7);
+}
+
+async function importListings() {
+  logger.info('Getting listings')
+  const listings = await getListings();
+
+  logger.info('Connecting to database');
+  await mongoClient.connect();
+  const db = mongoClient.db(mongoDBName);
+  const listingsCol = db.collection('listings');
+
+  logger.info('Processing listings');
+  const proccessedListings = await Promise.all(
+    listings.map(listing => processZooplaListing(listing)));
+
+  logger.info('Adding removed property to properties not in response');
+  const currentListingIDs = proccessedListings.map(listing => listing.listingID);
+  listingsCol.updateMany(
+    { listingID: { $nin: currentListingIDs } },
+    { $set: { removed: true } });
+
+  logger.info('Updating listing data in db');
+  await Promise.all(proccessedListings.map(listing => listingsCol.updateOne(
+      { listingID: listing.listingID },
+      { $set: listing },
+      { upsert: true }
+  )));
+
+  logger.info('Exiting');
+  mongoClient.close();
+  return;
 }
 
 async function main() {
   // Ensure the data directory exists
   await fs.mkdir('./data', { recursive: true });
-  const listings = await getListings();
-  await Promise.all(listings.map(listing => processZooplaListing(listing)));
+  await importListings();
 }
 
-main()
-  .then(result => {
-    console.log(JSON.stringify(result));
-    // process.exit(0);
-   })
-  .catch(err => {
-    console.error('Error running main:', err);
-    // process.exit(1);
-  });
+main();
