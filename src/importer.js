@@ -12,7 +12,7 @@ const MongoClient = require('mongodb').MongoClient;
 const secrets = require('./secrets.json');
 
 const mongoDBName = 'property-swipe';
-const dataDir = '../data';
+const dataDir = path.resolve('..', 'data');
 
 const mapsClient = new MapsClient();
 const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
@@ -40,6 +40,7 @@ async function cached(func, cacheFileName, maxAgeHours) {
   if (fileNeedsUpdate) {
     // Ensure the data directory exists
     await fs.mkdir(path.dirname(cacheFilePath), { recursive: true });
+    // Run the function and write it out to the data directory
     const funcResult = await func();
     await fs.writeFile(cacheFilePath, JSON.stringify(funcResult));
     return funcResult;
@@ -79,7 +80,6 @@ function getListingURL(listingID) {
 }
 
 async function fetchListingDetailsPage(listingID) {
-  await fs.mkdir('./data/details-html/', { recursive: true });
   return cached(async () => {
     logger.info('Fetching property details page for ' + listingID);
     const listingUrl = getListingURL(listingID);
@@ -88,12 +88,11 @@ async function fetchListingDetailsPage(listingID) {
       throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
     }
     return await response.text();
-  }, `details-html/${listingID}.html`, 24 * 7);
+  }, path.join('details-html', `${listingID}.html`), 24 * 7);
 }
 
 async function getListingDetails(listingID) {
   const jsonLDSelector = 'script[type="application/ld+json"]';
-  await fs.mkdir('./data/details-json/', { recursive: true });
   return cached(async () => {
     const listingPageText = await fetchListingDetailsPage(listingID);
     logger.info('Parsing property details page for ' + listingID);
@@ -104,7 +103,7 @@ async function getListingDetails(listingID) {
       .filter(g => g !== undefined)
       .flat()
       .find(entry => entry['@type'] === "Residence");
-  }, `details-json/${listingID}.json`, 24 * 7);
+  }, path.join('details-json', `${listingID}.json`), 24 * 7);
 }
 
 async function getCommuteTimes(latitude, longitude) {
@@ -124,7 +123,6 @@ async function getCommuteTimes(latitude, longitude) {
 }
 
 async function processZooplaListing(listing) {
-  await fs.mkdir('./data/processed/', { recursive: true });
   const listingID = listing.listing_id;
   return cached(async () => {
     const [commuteTimes, details] = await Promise.all([
@@ -144,7 +142,7 @@ async function processZooplaListing(listing) {
       link: getListingURL(listingID),
       photos: details.photo.map(imgObject => imgObject.contentUrl)
     };
-  }, `processed/${listingID}.json`, 24 * 7);
+  }, path.join('processed', `${listingID}.json`), 24 * 7);
 }
 
 async function importListings() {
