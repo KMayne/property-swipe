@@ -22,9 +22,10 @@ const logger = winston.createLogger({
 
 // Initialise app
 const app = express();
+app.use(express.json());
 
 // Setup database
-const mongoDBName = 'property-swiper'
+const mongoDBName = 'property-swipe'
 const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
   { useNewUrlParser: true, useUnifiedTopology: true });
 mongoClient.connect()
@@ -33,6 +34,36 @@ mongoClient.connect()
     app.db = db;
     app.emit('ready');
   });
+app.use((req, _, next) => {
+  req.db = app.db;
+  next();
+});
+
+app.get('/api/properties', async (req, res) => {
+  const listingsCol = req.db.collection('listings');
+  const usersCol = req.db.collection('users');
+
+  const user = await usersCol.findOne({ username: 'kian' });
+  const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
+  console.log(seenProperties)
+
+  const query = { listingID: { $nin: seenProperties } };
+  const sort = ['workCommuteMins', 'price'];
+  const nonSeenProperties = await listingsCol.find(query, { sort });
+  res.json(await nonSeenProperties.toArray());
+});
+
+app.get('/api/user', async (req, res) => {
+  const usersCol = req.db.collection('users');
+  const user = await usersCol.findOne({ username: 'kian' });
+  res.json(user);
+});
+
+app.put('/api/user', async (req, res) => {
+  const usersCol = req.db.collection('users');
+  await usersCol.findOneAndReplace({ username: 'kian' }, req.body);
+  res.sendStatus(204);
+});
 
 // Setup history fallback
 app.use(history());
