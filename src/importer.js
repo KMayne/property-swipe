@@ -59,8 +59,8 @@ async function getMapPage() {
 
 async function getListings() {
   return cached(async () => {
-    logger.info('Parsing map page for listings');
     const dom = new JSDOM(await getMapPage());
+    logger.info('Parsing map page for listings');
     const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));
     const dataScript =
       scriptElems
@@ -95,8 +95,8 @@ async function getListingDetails(listingID) {
   const jsonLDSelector = 'script[type="application/ld+json"]';
   await fs.mkdir('./data/details-json/', { recursive: true });
   return cached(async () => {
-    logger.info('Parsing property details page for ' + listingID);
     const listingPageText = await fetchListingDetailsPage(listingID);
+    logger.info('Parsing property details page for ' + listingID);
     const dom = new JSDOM(listingPageText);
     const jsonLDElems = dom.window.document.querySelectorAll(jsonLDSelector);
     return Array.from(jsonLDElems)
