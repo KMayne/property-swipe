@@ -85,7 +85,8 @@ async function fetchListingDetailsPage(listingID) {
     const listingUrl = getListingURL(listingID);
     const response = await rateLimitedFetch(listingUrl);
     if (!response.ok) {
-      throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
+      throw new Error(`Error retrieving response for ${listingID}. `
+        + `Status code ${response.status}, response: ${await response.text()}`);
     }
     return await response.text();
   }, path.join('details-html', `${listingID}.html`), 24 * 7);
