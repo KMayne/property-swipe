@@ -116,7 +116,7 @@ async function getCommuteTimes(latitude, longitude) {
     units: 'metric'
   }});
   const times = response.data.rows[0];
-  if (times.status !== 'OK') return { workCommuteMins: 0 };
+  if (times.status !== 'OK') return { workCommuteMins: null };
   const [workCommuteMins] =
     workCommuteResults.map(elem => Math.round(elem.duration.value / 60));
   return { workCommuteMins };
