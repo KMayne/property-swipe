@@ -115,11 +115,9 @@ async function getCommuteTimes(latitude, longitude) {
     mode: 'transit',
     units: 'metric'
   }});
-  const times = response.data.rows[0];
-  if (times.status !== 'OK') return { workCommuteMins: null };
-  const [workCommuteMins] =
-    workCommuteResults.map(elem => Math.round(elem.duration.value / 60));
-  return { workCommuteMins };
+  const commuteTime = response.data.rows[0].elements[0];
+  if (commuteTime.status !== 'OK') return { workCommuteMins: null };
+  return { workCommuteMins: Math.round(commuteTime.duration.value / 60) };
 }
 
 async function processZooplaListing(listing) {
@@ -140,7 +138,8 @@ async function processZooplaListing(listing) {
       ...commuteTimes,
       locality: details.address.addressLocality,
       link: getListingURL(listingID),
-      photos: details.photo.map(imgObject => imgObject.contentUrl)
+      photos: details.photo.map(imgObject => imgObject.contentUrl),
+      updated: new Date()
     };
   }, path.join('processed', `${listingID}.json`), 24 * 7);
 }

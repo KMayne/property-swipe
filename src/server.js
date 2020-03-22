@@ -18,7 +18,7 @@ const logger = winston.createLogger({
 });
 
 // Import listings from Zoopla into DB
-// importListings().then(() => logger.info('Listings updated'));
+importListings().then(() => logger.info('Listings updated'));
 
 // Initialise app
 const app = express();
