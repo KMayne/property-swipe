@@ -12,7 +12,7 @@ const MongoClient = require('mongodb').MongoClient;
 const secrets = require('./secrets.json');
 
 const mongoDBName = 'property-swipe';
-const dataDir = path.resolve('..', 'data');
+const dataDir = path.resolve(path.dirname(require.main.filename), '..', 'data');
 
 const mapsClient = new MapsClient();
 const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
