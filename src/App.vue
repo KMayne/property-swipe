@@ -2,7 +2,7 @@
   <div id="app">
     <md-toolbar><h1>Property Swiper</h1></md-toolbar>
     <carousel :perPage="1">
-      <slide v-for="photoUrl in listing.photos" class="photo-slide">
+      <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
         <img class="photo" :src="photoUrl">
       </slide>
     </carousel>
@@ -13,10 +13,6 @@
       <li>
         <i class="material-icons"> work </i>
         {{listing.workCommuteMins}} minutes to work
-      </li>
-      <li>
-        <i class="material-icons"> favorite </i>
-        {{listing.gfCommuteMins}} minutes to girlfriend
       </li>
       <li>
         <i class="material-icons"> link </i>

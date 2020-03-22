@@ -2,6 +2,7 @@
 
 const fetch = require('node-fetch');
 const fs = require('fs').promises;
+const path = require('path');
 const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const MapsClient = require("@googlemaps/google-maps-services-js").Client;
@@ -10,7 +11,8 @@ const MongoClient = require('mongodb').MongoClient;
 
 const secrets = require('./secrets.json');
 
-const mongoDBName = 'property-swipe'
+const mongoDBName = 'property-swipe';
+const dataDir = '../data';
 
 const mapsClient = new MapsClient();
 const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
@@ -29,17 +31,20 @@ const rateLimitedFetch = limiter.wrap(fetch);
 
 async function cached(func, cacheFileName, maxAgeHours) {
   const maxAgeMillis = maxAgeHours * 60 * 60 * 1000;
-  const fileNeedsUpdate = await fs.stat(cacheFileName)
+  const cacheFilePath = path.join(dataDir, cacheFileName);
+  const fileNeedsUpdate = await fs.stat(cacheFilePath)
     // Check if last modified within max age
     .then(stat => (new Date() - stat.mtime) > maxAgeMillis)
     // Non-existent file needs update
     .catch(err => true);
   if (fileNeedsUpdate) {
+    // Ensure the data directory exists
+    await fs.mkdir(path.dirname(cacheFilePath), { recursive: true });
     const funcResult = await func();
-    await fs.writeFile(cacheFileName, JSON.stringify(funcResult));
+    await fs.writeFile(cacheFilePath, JSON.stringify(funcResult));
     return funcResult;
   } else {
-    const fileText = await fs.readFile(cacheFileName, { encoding: 'utf8' });
+    const fileText = await fs.readFile(cacheFilePath, { encoding: 'utf8' });
     return JSON.parse(fileText);
   }
 }
@@ -49,7 +54,7 @@ async function getMapPage() {
     logger.info('Fetching map page');
     const response = await rateLimitedFetch(secrets.zooplaSearchURL);
     return response.text();
-  }, './data/map.html', 0.5);
+  }, 'map.html', 0.5);
 }
 
 async function getListings() {
@@ -66,7 +71,7 @@ async function getListings() {
     }
     const listingArrayRegex = /var data = \{[\s]+(.+\n)+\s+listings: (?<listings>\[.+\])/;
     return JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
-  }, './data/listings.json', 0.5);
+  }, 'listings.json', 0.5);
 }
 
 function getListingURL(listingID) {
@@ -83,7 +88,7 @@ async function fetchListingDetailsPage(listingID) {
       throw new Error(`Error retrieving response for ${listingID}. Status code ${response.status}, response: ${await response.text()}`);
     }
     return await response.text();
-  }, `./data/details-html/${listingID}.html`, 24 * 7);
+  }, `details-html/${listingID}.html`, 24 * 7);
 }
 
 async function getListingDetails(listingID) {
@@ -99,23 +104,23 @@ async function getListingDetails(listingID) {
       .filter(g => g !== undefined)
       .flat()
       .find(entry => entry['@type'] === "Residence");
-  }, `./data/details-json/${listingID}.json`, 24 * 7);
+  }, `details-json/${listingID}.json`, 24 * 7);
 }
 
 async function getCommuteTimes(latitude, longitude) {
   const response = await mapsClient.distancematrix({ params: {
     origins: [`${latitude},${longitude}`],
-    destinations: [secrets.workLocation, secrets.gfLocation],
+    destinations: [secrets.workLocation],
     key: secrets.mapsAPIKey,
     arrival_time: (new Date(2020, 2, 23, 9)).getTime() / 1000,
     mode: 'transit',
     units: 'metric'
   }});
   const times = response.data.rows[0];
-  if (times.status !== 'OK') return { workCommuteMins: 0, gfCommuteMins: 0 };
-  const [workCommuteMins, gfCommuteMins] =
+  if (times.status !== 'OK') return { workCommuteMins: 0 };
+  const [workCommuteMins] =
     workCommuteResults.map(elem => Math.round(elem.duration.value / 60));
-  return { workCommuteMins, gfCommuteMins };
+  return { workCommuteMins };
 }
 
 async function processZooplaListing(listing) {
@@ -139,7 +144,7 @@ async function processZooplaListing(listing) {
       link: getListingURL(listingID),
       photos: details.photo.map(imgObject => imgObject.contentUrl)
     };
-  }, `./data/processed/${listingID}.json`, 24 * 7);
+  }, `processed/${listingID}.json`, 24 * 7);
 }
 
 async function importListings() {
@@ -155,7 +160,7 @@ async function importListings() {
   const proccessedListings = await Promise.all(
     listings.map(listing => processZooplaListing(listing)));
 
-  logger.info('Adding removed property to properties not in response');
+  logger.info('Marking propeties not in the response as removed');
   const currentListingIDs = proccessedListings.map(listing => listing.listingID);
   listingsCol.updateMany(
     { listingID: { $nin: currentListingIDs } },
@@ -164,19 +169,13 @@ async function importListings() {
   logger.info('Updating listing data in db');
   await Promise.all(proccessedListings.map(listing => listingsCol.updateOne(
       { listingID: listing.listingID },
-      { $set: listing },
+      { $set: { ...listing, removed: false } },
       { upsert: true }
   )));
 
-  logger.info('Exiting');
+  logger.info('Closing connection');
   mongoClient.close();
   return;
 }
 
-async function main() {
-  // Ensure the data directory exists
-  await fs.mkdir('./data', { recursive: true });
-  await importListings();
-}
-
-main();
+module.exports = importListings;
