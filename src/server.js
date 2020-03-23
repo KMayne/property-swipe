@@ -61,8 +61,11 @@ app.get('/api/user', async (req, res) => {
 
 app.put('/api/user', async (req, res) => {
   const usersCol = req.db.collection('users');
-  await usersCol.findOneAndReplace({ username: 'kian' }, req.body);
-  res.sendStatus(204);
+  const user = req.body;
+  delete user._id;
+  usersCol.findOneAndReplace({ username: 'kian' }, user)
+    .then(() => res.sendStatus(204))
+    .catch(err => res.status(500).json(err));
 });
 
 // Setup history fallback
