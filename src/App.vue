@@ -1,38 +1,46 @@
 <template>
   <div id="app">
     <md-toolbar><h1>Property Swiper</h1></md-toolbar>
-    <carousel :perPage="1">
-      <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
-        <img class="photo" :src="photoUrl">
-      </slide>
-    </carousel>
-    <ul>
-      <li class="heading">
-        £{{listing.price}} pcm - {{listing.summary}} - {{listing.locality}}
-      </li>
-      <li>
-        <i class="material-icons"> work </i>
-        {{listing.workCommuteMins}} minutes to work
-      </li>
-      <li>
-        <i class="material-icons"> link </i>
-        <a :href="listing.link" rel="nofollow" target="_blank">{{listing.link}}</a>
-      </li>
-    </ul>
-    <div class="actions">
-      <md-button class="md-icon-button md-raised undo">
-        <md-icon>undo</md-icon>
-      </md-button>
-      <md-button class="md-icon-button md-raised no big">
-        <md-icon>close</md-icon>
-      </md-button>
-      <md-button class="md-icon-button md-raised yes big">
-        <md-icon>check</md-icon>
-      </md-button>
-      <md-button class="md-icon-button md-raised star">
-        <md-icon>star</md-icon>
-      </md-button>
-    </div>
+    <section v-if="listing !== undefined">
+      <carousel :perPage="1">
+        <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
+          <img class="photo" :src="photoUrl">
+        </slide>
+      </carousel>
+      <ul>
+        <li class="heading">
+          £{{listing.price}} pcm - {{listing.summary}} - {{listing.locality}}
+        </li>
+        <li>
+          <i class="material-icons"> work </i>
+          {{listing.workCommuteMins}} minutes to work
+        </li>
+        <li>
+          <i class="material-icons"> link </i>
+          <a :href="listing.link" rel="nofollow" target="_blank">{{listing.link}}</a>
+        </li>
+      </ul>
+      <div class="actions">
+        <md-button
+          @click="undoClicked"
+          class="md-icon-button md-raised undo"
+          :disabled="prevStates.length === 0">
+          <md-icon>undo</md-icon>
+        </md-button>
+        <md-button @click="rejectClicked" class="md-icon-button md-raised no big">
+          <md-icon>close</md-icon>
+        </md-button>
+        <md-button @click="acceptClicked" class="md-icon-button md-raised yes big">
+          <md-icon>check</md-icon>
+        </md-button>
+        <md-button @click="starClicked" class="md-icon-button md-raised star">
+          <md-icon>star</md-icon>
+        </md-button>
+      </div>
+    </section>
+    <h2 v-else>
+      No listing
+    </h2>
   </div>
 </template>
 
@@ -40,22 +48,31 @@
 import Vue from 'vue';
 import { Carousel, Slide } from 'vue-carousel';
 
-const listing = {
-  price: 1250,
-  summary: '1 bed flat',
-  locality: 'Harrow',
-  workCommuteMins: 38,
-  gfCommuteMins: 53,
-  link: 'https://www.zoopla.co.uk/to-rent/details/28710078',
-  listingID: '28710078',
-  photos: [
-    'https://lid.zoocdn.com/645/430/1e908a9a9686b21bbc1aca9f7d1bc94a58a6626a.jpg',
-    'https://lid.zoocdn.com/645/430/afbb0c1ab60fa6e85df715fd10bad65fe1667d63.jpg',
-    'https://lid.zoocdn.com/645/430/17c6004e05b874a6a799f6181d9a8a9bd01ac07f.jpg',
-    'https://lid.zoocdn.com/645/430/3d393866d37067471b3db2033717a6008cb7ea98.jpg',
-    'https://lid.zoocdn.com/645/430/98d3042a1f81aa22935a120996eb009b9d9a46c9.jpg'
-  ]
-};
+interface Listing {
+  listingID: string;
+  price: number;
+  summary: string;
+  locality: string;
+  workCommuteMins: number;
+  photoUrl: string;
+  link: string;
+}
+
+interface User {
+  _id: string;
+  accepted: string[];
+  rejected: string[];
+  starred: string[];
+  username: string;
+}
+
+interface AppState {
+  listing: Listing | undefined;
+  listings: Listing[];
+  prevStates: Array<User | undefined>;
+  prevListings: Array<Listing | undefined>;
+  user: User | undefined;
+}
 
 export default Vue.extend({
   components: {
@@ -63,8 +80,79 @@ export default Vue.extend({
     Slide
   },
   data: () => ({
-    listing
-  })
+    listing: undefined,
+    listings: [],
+    prevStates: [],
+    prevListings: [],
+    user: undefined
+  } as AppState),
+  mounted() {
+    fetch('/api/user')
+      .then(res => res.json())
+      .then(user => this.user = user)
+      .catch(err => console.error('Failed to load user', err));
+
+    fetch('/api/listings')
+      .then(res => res.json())
+      .then(listings => {
+        this.listings = listings.reverse();
+        this.listing = this.listings.pop();
+      })
+      .catch(err => console.error('Failed to load listings', err));
+  },
+  methods: {
+    undoClicked() {
+      if (this.prevStates.length <= 0 || this.prevListings.length <= 0) {
+        return console.error('Cannot undo - no history');
+      }
+      this.user = this.prevStates.pop();
+      this.updateUser();
+      if (this.listing !== undefined) { this.listings.push(this.listing); }
+      this.listing = this.prevListings.pop();
+    },
+
+    rejectClicked() {
+      if (!this.user || !this.listing) { return; }
+      this.saveState();
+      // Add this item to list of rejected
+      this.user.rejected.push(this.listing.listingID);
+      this.updateUser();
+      this.listing = this.listings.pop();
+    },
+
+    acceptClicked() {
+      if (!this.user || !this.listing) { return; }
+      this.saveState();
+      // Add this item to list of rejected
+      this.user.accepted.push(this.listing.listingID);
+      this.updateUser();
+      this.listing = this.listings.pop();
+    },
+
+    starClicked() {
+      if (!this.user || !this.listing) { return; }
+      this.saveState();
+      // Add this item to list of rejected
+      this.user.starred.push(this.listing.listingID);
+      this.updateUser();
+      this.listing = this.listings.pop();
+    },
+
+    saveState() {
+      this.prevStates.push(JSON.parse(JSON.stringify(this.user)));
+      this.prevListings.push(this.listing);
+    },
+
+    updateUser() {
+      fetch('/api/user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.user)
+      }).then(async res => {
+        if (!res.ok) { console.error('Error updating user', await res.text()); }
+      });
+    }
+  }
 });
 </script>
 
@@ -121,7 +209,7 @@ li > a {
   text-align: center;
 }
 
-.md-button.undo {
+.md-button.undo:enabled {
   background-color: rgb(255, 193, 7) !important;
 }
 

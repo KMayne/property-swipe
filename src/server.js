@@ -39,7 +39,7 @@ app.use((req, _, next) => {
   next();
 });
 
-app.get('/api/properties', async (req, res) => {
+app.get('/api/listings', async (req, res) => {
   const listingsCol = req.db.collection('listings');
   const usersCol = req.db.collection('users');
 
