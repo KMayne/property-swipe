@@ -7,16 +7,13 @@ const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const MapsClient = require("@googlemaps/google-maps-services-js").Client;
 const winston = require('winston');
-const MongoClient = require('mongodb').MongoClient;
+const dbClient = require('./mongodb');
 
 const secrets = require('./secrets.json');
 
-const mongoDBName = 'property-swipe';
 const dataDir = path.resolve(path.dirname(require.main.filename), '..', 'data');
 
 const mapsClient = new MapsClient();
-const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
-  { useNewUrlParser: true, useUnifiedTopology: true });
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.simple(),
@@ -145,13 +142,9 @@ async function processZooplaListing(listing) {
   }, path.join('processed', `${listingID}.json`), 24 * 7);
 }
 
-async function importListings() {
+async function importListings(db) {
   logger.info('Getting listings')
   const listings = await getListings();
-
-  logger.info('Connecting to database');
-  await mongoClient.connect();
-  const db = mongoClient.db(mongoDBName);
   const listingsCol = db.collection('listings');
 
   logger.info('Processing listings');
@@ -170,10 +163,12 @@ async function importListings() {
       { $set: { ...listing, removed: false } },
       { upsert: true }
   )));
+}
 
-  logger.info('Closing connection');
-  mongoClient.close();
-  return;
+async function main() {
+  const db = dbClient.connect();
+  await importListings(db);
+  dbClient.disconnect();
 }
 
 module.exports = importListings;

@@ -4,9 +4,9 @@ const http = require('http');
 const express = require('express');
 const history = require('connect-history-api-fallback');
 const winston = require('winston');
-const MongoClient = require('mongodb').MongoClient;
 
-const importListings = require('./importer.js');
+const dbClient = require('./mongodb');
+const importListings = require('./importer');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -17,20 +17,15 @@ const logger = winston.createLogger({
   transports: new winston.transports.Console(),
 });
 
-// Import listings from Zoopla into DB
-importListings().then(() => logger.info('Listings updated'));
-
 // Initialise app
 const app = express();
 app.use(express.json());
 
 // Setup database
-const mongoDBName = 'property-swipe'
-const mongoClient = new MongoClient('mongodb://localhost:27017/' + mongoDBName,
-  { useNewUrlParser: true, useUnifiedTopology: true });
-mongoClient.connect()
-  .then(() => {
-    const db = mongoClient.db(mongoDBName);
+dbClient.connect()
+  .then(db => {
+    // Import listings from Zoopla into DB
+    importListings(db).then(() => logger.info('Listings updated'));
     app.db = db;
     app.emit('ready');
   });
