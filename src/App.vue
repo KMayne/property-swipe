@@ -2,7 +2,7 @@
   <div id="app">
     <md-toolbar><h1>Property Swiper</h1></md-toolbar>
     <section v-if="listing !== undefined">
-      <carousel :perPage="1">
+      <carousel :perPage="1" :navigateTo="slideNum" @page-change="page => slideNum = page">
         <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
           <img class="photo" :src="photoUrl">
         </slide>
@@ -72,6 +72,7 @@ interface AppState {
   prevStates: Array<User | undefined>;
   prevListings: Array<Listing | undefined>;
   user: User | undefined;
+  slideNum: [number, boolean];
 }
 
 export default Vue.extend({
@@ -84,7 +85,8 @@ export default Vue.extend({
     listings: [],
     prevStates: [],
     prevListings: [],
-    user: undefined
+    user: undefined,
+    slideNum: [0, false]
   } as AppState),
   mounted() {
     fetch('/api/user')
@@ -118,6 +120,7 @@ export default Vue.extend({
       this.user.rejected.push(this.listing.listingID);
       this.updateUser();
       this.listing = this.listings.pop();
+      this.slideNum = [0, false];
     },
 
     acceptClicked() {
@@ -127,6 +130,7 @@ export default Vue.extend({
       this.user.accepted.push(this.listing.listingID);
       this.updateUser();
       this.listing = this.listings.pop();
+      this.slideNum = [0, false];
     },
 
     starClicked() {
@@ -136,6 +140,7 @@ export default Vue.extend({
       this.user.starred.push(this.listing.listingID);
       this.updateUser();
       this.listing = this.listings.pop();
+      this.slideNum = [0, false];
     },
 
     saveState() {
