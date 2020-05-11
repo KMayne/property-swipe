@@ -116,8 +116,15 @@ async function getCommuteTimes(latitude, longitude) {
     mode: 'transit',
     units: 'metric'
   }});
+  if (response.data.status !== 'OK') {
+    console.error('Error getting commute time - response was', response.data);
+    return { workCommuteMins: null };
+  }
   const commuteTime = response.data.rows[0].elements[0];
-  if (commuteTime.status !== 'OK') return { workCommuteMins: null };
+  if (commuteTime.status && commuteTime.status !== 'OK') {
+    console.error('Error getting commute time - response was', commuteTime);
+    return { workCommuteMins: null };
+  }
   return { workCommuteMins: Math.round(commuteTime.duration.value / 60) };
 }
 
@@ -127,7 +134,7 @@ async function processZooplaListing(listing) {
     const [commuteTimes, details] = await Promise.all([
       getCommuteTimes(listing.lat, listing.lon),
       getListingDetails(listingID)
-      ]);
+    ]);
     const priceRegex = /£(?<price>[\d,]+) pcm/;
     const price = Number(details.description
       .match(priceRegex).groups.price
