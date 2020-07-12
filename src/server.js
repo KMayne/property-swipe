@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
 const apiRouter = require('./api');
+const secrets = require('./secrets.json');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -23,6 +24,9 @@ const logger = winston.createLogger({
 // Initialise app
 const app = express();
 app.use(express.json());
+
+// Setup loginKey
+app.set('loginKey', secrets.loginKey);
 
 // Setup database
 dbConnection.connect()
@@ -73,22 +77,3 @@ app.use((err, req, res, _) => {
 app.logger = logger;
 
 app.on('ready', () => app.listen(3000, () => logger.info('Listening on port 3000')));
-
-randomString(12)
-  .then(key => {
-    app.set('bootstrapKey', key);
-    logger.info('Use the following link to log in: /?key=' + key);
-  })
-  .catch(err => logger.error('Error generating bootstrap key: ' + err));
-
-function randomString(bytes) {
-  bytes = bytes || 64;
-  return promisify(crypto.randomBytes)(bytes)
-    .then(buf => {
-      let str = '';
-      for (let offset = 0; offset < buf.length; offset += 6) {
-        str += buf.readIntLE(offset, Math.min(buf.length - offset, 6)).toString(36);
-      }
-      return str;
-    });
-};

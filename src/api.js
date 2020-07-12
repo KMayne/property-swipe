@@ -2,7 +2,7 @@ const router = require('express').Router();
 
 router.use((req, res, next) => {
   const key = req.query.key;
-  if (key && key === req.app.get('bootstrapKey')) {
+  if (key && key === req.app.get('loginKey')) {
     return next();
   }
   const error = new Error("User key missing/bad");
