@@ -1,5 +1,8 @@
 node_modules
 dist/
-npm-debug.log
-data/*
+data/
+helm/
+
 src/secrets.json
+
+npm-debug.log
