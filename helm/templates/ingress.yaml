@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{ include "property-swipe.fullname" . }}
+spec:
+  rules:
+  - host: ps.kianmayne.co.uk
+    http:
+      paths:
+        - path: /
+          backend:
+            serviceName: {{ include "property-swipe.fullname" . }}
+            servicePort: {{ .Values.port }}

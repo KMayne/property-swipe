@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "property-swipe.fullname" . }}
+  labels:
+    {{- include "property-swipe.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "property-swipe.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "property-swipe.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+          - name: http
+            containerPort: {{ .Values.port }}
+            protocol: TCP
+        volumeMounts:
+        - name: secrets
+          mountPath: "/app/src/secrets.json"
+          subPath: secrets.json
+          readOnly: true
+        - name: cached-property-data
+          mountPath: "/app/data/"
+          readOnly: false
+      volumes:
+      - name: secrets
+        secret:
+          secretName: property-swipe-secrets
+      - name: cached-property-data
+        persistentVolumeClaim:
+          claimName: cached-property-data

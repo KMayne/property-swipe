@@ -5,7 +5,7 @@ const express = require('express');
 const history = require('connect-history-api-fallback');
 const winston = require('winston');
 
-const dbClient = require('./mongodb');
+const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
 
 const logger = winston.createLogger({
@@ -22,7 +22,7 @@ const app = express();
 app.use(express.json());
 
 // Setup database
-dbClient.connect()
+dbConnection.connect()
   .then(db => {
     // Import listings from Zoopla into DB
     importListings(db).then(() => logger.info('Listings updated'));
@@ -79,6 +79,8 @@ if (['development', 'staging', 'testing'].includes(process.env.NODE_ENV)) {
 
   app.use(webpackDevMiddleware(compiler));
   app.use(hotMiddleware(compiler, { log: console.log }));
+} else {
+  app.use(express.static('dist'));
 }
 
 // 404 handler
