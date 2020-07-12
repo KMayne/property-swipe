@@ -52,7 +52,6 @@ app.get('/api/listings', async (req, res) => {
 
   const user = await usersCol.findOne({ username: 'kian' });
   const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
-  console.log(seenProperties)
 
   const query = { listingID: { $nin: seenProperties } };
   const sort = ['workCommuteMins', 'price'];
