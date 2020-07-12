@@ -4,6 +4,8 @@ const http = require('http');
 const express = require('express');
 const history = require('connect-history-api-fallback');
 const winston = require('winston');
+const { promisify } = require('util');
+const crypto = require('crypto');
 
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
@@ -29,6 +31,16 @@ dbConnection.connect()
     app.db = db;
     app.emit('ready');
   });
+
+app.use((req, res, next) => {
+  const key = req.query.key;
+  if (!key || key === 'null' || key !== req.app.get('bootstrapKey')) {
+    const error = new Error("User key missing/bad");
+    error.status = 403;
+    return next(error);
+  }
+});
+
 app.use((req, _, next) => {
   req.db = app.db;
   next();
@@ -96,3 +108,22 @@ app.use((err, req, res, _) => {
 app.logger = logger;
 
 app.on('ready', () => app.listen(3000, () => logger.info('Listening on port 3000')));
+
+utils.randomString()
+  .then(key => {
+    app.set('bootstrapKey', key);
+    utils.log('Use the following link to log in: /?key=' + key);
+  })
+  .catch(err => utils.error('Error generating bootstrap key: ' + err));
+
+function randomString(bytes) {
+  bytes = bytes || 64;
+  return promisify(crypto.randomBytes)(bytes)
+    .then(buf => {
+      let str = '';
+      for (let offset = 0; offset < buf.length; offset += 6) {
+        str += buf.readIntLE(offset, Math.min(buf.length - offset, 6)).toString(36);
+      }
+      return str;
+    });
+};

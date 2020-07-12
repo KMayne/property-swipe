@@ -89,12 +89,17 @@ export default Vue.extend({
     slideNum: [0, false]
   } as AppState),
   mounted() {
-    fetch('/api/user')
+    const query = location.search.substring(1);
+    if (query.substr(0, 4) === 'key=') {
+      this.setKey(query.substring(4));
+    }
+
+    fetch(this.addURLKey('/api/user'))
       .then(res => res.json())
       .then(user => this.user = user)
       .catch(err => console.error('Failed to load user', err));
 
-    fetch('/api/listings')
+    fetch(this.addURLKey('/api/listings'))
       .then(res => res.json())
       .then(listings => {
         this.listings = listings.reverse();
@@ -103,6 +108,18 @@ export default Vue.extend({
       .catch(err => console.error('Failed to load listings', err));
   },
   methods: {
+    getKey() {
+      return localStorage.getItem('loginKey');
+    },
+
+    setKey(key) {
+      localStorage.setItem('loginKey', key);
+    },
+
+    addURLKey(url) {
+      return url + '?key=' + this.getKey();
+    },
+
     undoClicked() {
       if (this.prevStates.length <= 0 || this.prevListings.length <= 0) {
         return console.error('Cannot undo - no history');
@@ -149,7 +166,7 @@ export default Vue.extend({
     },
 
     updateUser() {
-      fetch('/api/user', {
+      fetch(this.addURLKey('/api/user'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.user)
