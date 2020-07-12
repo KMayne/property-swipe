@@ -4,9 +4,12 @@ const http = require('http');
 const express = require('express');
 const history = require('connect-history-api-fallback');
 const winston = require('winston');
+const { promisify } = require('util');
+const crypto = require('crypto');
 
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
+const apiRouter = require('./api');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -25,43 +28,13 @@ app.use(express.json());
 dbConnection.connect()
   .then(db => {
     // Import listings from Zoopla into DB
-    importListings(db).then(() => logger.info('Listings updated'));
+    //importListings(db).then(() => logger.info('Listings updated'));
     app.db = db;
     app.emit('ready');
   });
-app.use((req, _, next) => {
-  req.db = app.db;
-  next();
-});
 
-app.get('/api/listings', async (req, res) => {
-  const listingsCol = req.db.collection('listings');
-  const usersCol = req.db.collection('users');
-
-  const user = await usersCol.findOne({ username: 'kian' });
-  const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
-  console.log(seenProperties)
-
-  const query = { listingID: { $nin: seenProperties } };
-  const sort = ['workCommuteMins', 'price'];
-  const nonSeenProperties = await listingsCol.find(query, { sort });
-  res.json(await nonSeenProperties.toArray());
-});
-
-app.get('/api/user', async (req, res) => {
-  const usersCol = req.db.collection('users');
-  const user = await usersCol.findOne({ username: 'kian' });
-  res.json(user);
-});
-
-app.put('/api/user', async (req, res) => {
-  const usersCol = req.db.collection('users');
-  const user = req.body;
-  delete user._id;
-  usersCol.findOneAndReplace({ username: 'kian' }, user)
-    .then(() => res.sendStatus(204))
-    .catch(err => res.status(500).json(err));
-});
+// Setup API
+app.use('/api', apiRouter);
 
 // Setup history fallback
 app.use(history());
@@ -96,3 +69,22 @@ app.use((err, req, res, _) => {
 app.logger = logger;
 
 app.on('ready', () => app.listen(3000, () => logger.info('Listening on port 3000')));
+
+randomString(12)
+  .then(key => {
+    app.set('bootstrapKey', key);
+    logger.info('Use the following link to log in: /?key=' + key);
+  })
+  .catch(err => logger.error('Error generating bootstrap key: ' + err));
+
+function randomString(bytes) {
+  bytes = bytes || 64;
+  return promisify(crypto.randomBytes)(bytes)
+    .then(buf => {
+      let str = '';
+      for (let offset = 0; offset < buf.length; offset += 6) {
+        str += buf.readIntLE(offset, Math.min(buf.length - offset, 6)).toString(36);
+      }
+      return str;
+    });
+};

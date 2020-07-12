@@ -7,8 +7,8 @@ const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const MapsClient = require("@googlemaps/google-maps-services-js").Client;
 const winston = require('winston');
-const dbClient = require('./dbConnection');
 
+const dbClient = require('./dbConnection');
 const secrets = require('./secrets.json');
 
 const dataDir = path.resolve(path.dirname(require.main.filename), '..', 'data');
