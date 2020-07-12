@@ -28,7 +28,8 @@ spec:
             protocol: TCP
         volumeMounts:
         - name: secrets
-          mountPath: "/app/src/"
+          mountPath: "/app/src/secrets.json"
+          subPath: secrets.json
           readOnly: true
         - name: cached-property-data
           mountPath: "/app/data/"
