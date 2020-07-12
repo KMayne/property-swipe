@@ -22,7 +22,7 @@ const logger = winston.createLogger({
   })]
 });
 const limiter = new Bottleneck({
-  minTime: 2000
+  minTime: 1000
 });
 const rateLimitedFetch = limiter.wrap(fetch);
 
@@ -67,7 +67,7 @@ async function getListings() {
     if (!dataScript) {
       throw new Error('Could not find script containing listing data');
     }
-    const listingArrayRegex = /var data = \{[\s]+(.+\n)+\s+listings: (?<listings>\[.+\])/;
+    const listingArrayRegex = /var data = \{(?:\n|.)+listings: (?<listings>\[.+\])/;
     return JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
   }, 'listings.json', 0.5);
 }
@@ -166,9 +166,13 @@ async function importListings(db) {
 }
 
 async function main() {
-  const db = dbClient.connect();
-  await importListings(db);
-  dbClient.disconnect();
+  await dbClient.connect()
+    // Import listings from Zoopla into DB
+    .then(db => importListings(db))
+    .then(() => {
+      logger.info('Listings updated')
+      dbClient.disconnect();
+    });
 }
 
 module.exports = importListings;
