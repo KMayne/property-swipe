@@ -112,11 +112,11 @@ export default Vue.extend({
       return localStorage.getItem('loginKey');
     },
 
-    setKey(key) {
+    setKey(key: string) {
       localStorage.setItem('loginKey', key);
     },
 
-    addURLKey(url) {
+    addURLKey(url: string) {
       return url + '?key=' + this.getKey();
     },
 

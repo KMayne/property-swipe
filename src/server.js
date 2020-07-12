@@ -9,6 +9,7 @@ const crypto = require('crypto');
 
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
+const apiRouter = require('./api');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -27,52 +28,13 @@ app.use(express.json());
 dbConnection.connect()
   .then(db => {
     // Import listings from Zoopla into DB
-    importListings(db).then(() => logger.info('Listings updated'));
+    //importListings(db).then(() => logger.info('Listings updated'));
     app.db = db;
     app.emit('ready');
   });
 
-app.use((req, res, next) => {
-  const key = req.query.key;
-  if (!key || key === 'null' || key !== req.app.get('bootstrapKey')) {
-    const error = new Error("User key missing/bad");
-    error.status = 403;
-    return next(error);
-  }
-});
-
-app.use((req, _, next) => {
-  req.db = app.db;
-  next();
-});
-
-app.get('/api/listings', async (req, res) => {
-  const listingsCol = req.db.collection('listings');
-  const usersCol = req.db.collection('users');
-
-  const user = await usersCol.findOne({ username: 'kian' });
-  const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
-
-  const query = { listingID: { $nin: seenProperties } };
-  const sort = ['workCommuteMins', 'price'];
-  const nonSeenProperties = await listingsCol.find(query, { sort });
-  res.json(await nonSeenProperties.toArray());
-});
-
-app.get('/api/user', async (req, res) => {
-  const usersCol = req.db.collection('users');
-  const user = await usersCol.findOne({ username: 'kian' });
-  res.json(user);
-});
-
-app.put('/api/user', async (req, res) => {
-  const usersCol = req.db.collection('users');
-  const user = req.body;
-  delete user._id;
-  usersCol.findOneAndReplace({ username: 'kian' }, user)
-    .then(() => res.sendStatus(204))
-    .catch(err => res.status(500).json(err));
-});
+// Setup API
+app.use('/api', apiRouter);
 
 // Setup history fallback
 app.use(history());
@@ -108,12 +70,12 @@ app.logger = logger;
 
 app.on('ready', () => app.listen(3000, () => logger.info('Listening on port 3000')));
 
-utils.randomString()
+randomString(12)
   .then(key => {
     app.set('bootstrapKey', key);
-    utils.log('Use the following link to log in: /?key=' + key);
+    logger.info('Use the following link to log in: /?key=' + key);
   })
-  .catch(err => utils.error('Error generating bootstrap key: ' + err));
+  .catch(err => logger.error('Error generating bootstrap key: ' + err));
 
 function randomString(bytes) {
   bytes = bytes || 64;
