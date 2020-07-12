@@ -27,8 +27,12 @@ app.use(express.json());
 // Setup database
 dbConnection.connect()
   .then(db => {
-    // Import listings from Zoopla into DB
-    //importListings(db).then(() => logger.info('Listings updated'));
+    function updateListings() {
+      importListings(db).then(() => logger.info('Listings updated'));
+    }
+    // Import listings from Zoopla into DB at startup & every hour after
+    updateListings();
+    setInterval(updateListings, 3600 * 1000);
     app.db = db;
     app.emit('ready');
   });
