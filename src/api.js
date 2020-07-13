@@ -17,7 +17,7 @@ router.get('/listings', async (req, res) => {
   const user = await usersCol.findOne({ username: 'kian' });
   const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
 
-  const query = { listingID: { $nin: seenProperties } };
+  const query = { listingID: { $nin: seenProperties }, removed: false };
   const sort = ['workCommuteMins', 'price'];
   const nonSeenProperties = await listingsCol.find(query, { sort });
   res.json(await nonSeenProperties.toArray());
