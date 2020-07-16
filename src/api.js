@@ -1,5 +1,9 @@
 const router = require('express').Router();
 
+router.get('/version', (req, res) => {
+  res.json({ version: process.env.PS_VERSION || 'UNVERSIONED' });
+});
+
 router.use((req, res, next) => {
   const key = req.query.key;
   if (key && key === req.app.get('loginKey')) {
