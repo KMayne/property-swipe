@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const MapsClient = require("@googlemaps/google-maps-services-js").Client;
 const winston = require('winston');
+const moment = require('moment');
 
 const dbClient = require('./dbConnection');
 const secrets = require('./secrets.json');
@@ -105,17 +106,24 @@ async function getListingDetails(listingID) {
 }
 
 async function getCommuteTimes(latitude, longitude) {
-  const response = await mapsClient.distancematrix({ params: {
+  const query = {
     origins: [`${latitude},${longitude}`],
     destinations: [secrets.workLocation],
     key: secrets.mapsAPIKey,
-    arrival_time: (new Date(2020, 2, 23, 9)).getTime() / 1000,
-    mode: 'transit',
+    // 9am next Monday
+    arrival_time: moment().day(8).hours(9).minutes(0).seconds(0).millisecond(0).unix(),
     units: 'metric'
-  }});
-  const commuteTime = response.data.rows[0].elements[0];
-  if (commuteTime.status !== 'OK') return { workCommuteMins: null };
-  return { workCommuteMins: Math.round(commuteTime.duration.value / 60) };
+  };
+
+  const [transitCommuteMins, bikeCommuteMins] = (await Promise.all([
+    mapsClient.distancematrix({ params: { ...query, mode: 'transit' }}),
+    mapsClient.distancematrix({ params: { ...query, mode: 'bicycling' }}),
+  ])).map(response => {
+    const commuteTime = response.data.rows[0].elements[0];
+    if (commuteTime.status !== 'OK') return null;
+    return Math.round(commuteTime.duration.value / 60);
+  });
+  return { transitCommuteMins, bikeCommuteMins };
 }
 
 async function processZooplaListing(listing) {
@@ -131,6 +139,8 @@ async function processZooplaListing(listing) {
       .replace(/,/g, ''));
     return {
       listingID,
+      latitude: listing.lat,
+      longitude: listing.lon,
       summary: details.name.replace(' to rent', ''),
       price,
       ...commuteTimes,
