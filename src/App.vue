@@ -12,8 +12,12 @@
           £{{listing.price}} pcm - {{listing.summary}} - {{listing.locality}}
         </li>
         <li>
-          <i class="material-icons"> work </i>
-          {{listing.workCommuteMins}} minutes to work
+          <i class="material-icons"> directions_transit </i>
+          {{listing.transitCommuteMins}} minutes to work via public transport
+        </li>
+        <li>
+          <i class="material-icons"> directions_bike </i>
+          {{listing.bikeCommuteMins}} minutes to work via bike
         </li>
         <li>
           <i class="material-icons"> link </i>
@@ -53,7 +57,8 @@ interface Listing {
   price: number;
   summary: string;
   locality: string;
-  workCommuteMins: number;
+  transitCommuteMins: number;
+  bikeCommuteMins: number;
   photoUrl: string;
   link: string;
 }
