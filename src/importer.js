@@ -27,6 +27,9 @@ const limiter = new Bottleneck({
 });
 const rateLimitedFetch = limiter.wrap(fetch);
 
+const mapPageMaxAgeHours = 0.5;
+const listingMaxAgeHours = 48;
+
 async function cached(func, cacheFileName, maxAgeHours) {
   const maxAgeMillis = maxAgeHours * 60 * 60 * 1000;
   const cacheFilePath = path.join(dataDir, cacheFileName);
@@ -53,7 +56,7 @@ async function getMapPage() {
     logger.info('Fetching map page');
     const response = await rateLimitedFetch(secrets.zooplaSearchURL);
     return response.text();
-  }, 'map.html', 0.5);
+  }, 'map.html', mapPageMaxAgeHours);
 }
 
 async function getListings() {
@@ -70,7 +73,7 @@ async function getListings() {
     }
     const listingArrayRegex = /var data = \{(?:\n|.)+listings: (?<listings>\[.+\])/;
     return JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
-  }, 'listings.json', 0.5);
+  }, 'listings.json', mapPageMaxAgeHours);
 }
 
 function getListingURL(listingID) {
@@ -87,7 +90,7 @@ async function fetchListingDetailsPage(listingID) {
         + `Status code ${response.status}, response: ${await response.text()}`);
     }
     return await response.text();
-  }, path.join('details-html', `${listingID}.html`), 24 * 7);
+  }, path.join('details-html', `${listingID}.html`), listingMaxAgeHours);
 }
 
 async function getListingDetails(listingID) {
@@ -102,7 +105,7 @@ async function getListingDetails(listingID) {
       .filter(g => g !== undefined)
       .flat()
       .find(entry => entry['@type'] === "Residence");
-  }, path.join('details-json', `${listingID}.json`), 24 * 7);
+  }, path.join('details-json', `${listingID}.json`), listingMaxAgeHours);
 }
 
 async function getCommuteTimes(latitude, longitude) {
@@ -149,7 +152,7 @@ async function processZooplaListing(listing) {
       photos: details.photo.map(imgObject => imgObject.contentUrl),
       updated: new Date()
     };
-  }, path.join('processed', `${listingID}.json`), 24 * 7);
+  }, path.join('processed', `${listingID}.json`), listingMaxAgeHours);
 }
 
 async function importListings(db) {
