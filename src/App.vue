@@ -41,9 +41,10 @@
           <md-icon>star</md-icon>
         </md-button>
       </div>
+      <p>{{listings.length}} properties remaining</p>
     </section>
     <h2 v-else>
-      No listing
+      No listings
     </h2>
   </div>
 </template>
@@ -255,5 +256,9 @@ li > a {
 .md-icon-button.big {
   width: 64px;
   height: 64px;
+}
+
+p {
+  text-align: center;
 }
 </style>
