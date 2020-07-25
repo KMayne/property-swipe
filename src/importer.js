@@ -29,6 +29,7 @@ const rateLimitedFetch = limiter.wrap(fetch);
 
 const mapPageMaxAgeHours = 0.5;
 const listingMaxAgeHours = 48;
+const proccessedListingMaxAgeHours = listingMaxAgeHours;
 
 async function cached(func, cacheFileName, maxAgeHours) {
   const maxAgeMillis = maxAgeHours * 60 * 60 * 1000;
@@ -93,19 +94,54 @@ async function fetchListingDetailsPage(listingID) {
   }, path.join('details-html', `${listingID}.html`), listingMaxAgeHours);
 }
 
+function parsePrice(priceStr) {
+  const priceRegex = /£(?<price>[\d,]+) pcm/;
+  return Number(priceStr.match(priceRegex).groups.price.replace(/,/g, ''));
+}
+
 async function getListingDetails(listingID) {
   const jsonLDSelector = 'script[type="application/ld+json"]';
   return cached(async () => {
     const listingPageText = await fetchListingDetailsPage(listingID);
     logger.info('Parsing property details page for ' + listingID);
     const dom = new JSDOM(listingPageText);
-    const jsonLDElems = dom.window.document.querySelectorAll(jsonLDSelector);
-    return Array.from(jsonLDElems)
+    const document = dom.window.document;
+    const jsonLdElems = document.querySelectorAll(jsonLDSelector);
+    const jsonMetadata = Array.from(jsonLdElems)
       .map(scriptElem => JSON.parse(scriptElem.text)['@graph'])
       .filter(g => g !== undefined)
       .flat()
       .find(entry => entry['@type'] === "Residence");
-  }, path.join('details-json', `${listingID}.json`), listingMaxAgeHours);
+
+    const featureListElem = document.querySelector('.dp-features-list--bullets');
+    let photos = [
+      ...jsonMetadata.photo.map(imgObject => imgObject.contentUrl),
+      ...(Array.from(document.querySelectorAll('.ui-modal-gallery__asset--center-content'))
+        .map(galleryContent => galleryContent.style.backgroundImage.match(/url\((?<url>.+)\)/)?.groups.url))
+    ];
+
+    const marketPriceElem = document.querySelector('.dp-market-stats__price');
+    const headlines =
+      Array.from((document.querySelector('.dp-features-list--counts') || new Node())
+        .querySelectorAll('.dp-features-list__text')).map(elem => elem.textContent.trim())
+        .map(headline => headline.match(/(?<num>\d+) (?<name>[a-zA-Z ]+ room)(?:s)?/));
+
+    return {
+      summary: jsonMetadata.name.replace(' to rent', ''),
+      price: parsePrice(jsonMetadata.description),
+      locality: jsonMetadata.address.addressLocality,
+      description: document.querySelector('.dp-description__text').textContent.trim(),
+      photos,
+      priceHistory: Array.from(document.querySelectorAll('.dp-price-history__item'))
+        .map(item => ({
+          date: moment(item.querySelector('.dp-price-history__item-date').textContent, 'Do MMM YYYY').toDate(),
+          price: parsePrice(item.querySelector('.dp-price-history__item-price').textContent)
+        })),
+      features: featureListElem === null ? [] : Array.from(featureListElem.querySelectorAll('.dp-features-list__item')).map(elem => elem.textContent.trim()),
+      viewCount: Number(document.querySelector('.dp-view-count__legend').textContent.match(/(?<viewCount>\d+) page views/).groups.viewCount),
+      avgAreaPrice: marketPriceElem === null ? null : parsePrice(marketPriceElem.textContent)
+    };
+  }, path.join('details-json', `${listingID}.json`), proccessedListingMaxAgeHours);
 }
 
 async function getCommuteTimes(latitude, longitude) {
@@ -135,24 +171,16 @@ async function processZooplaListing(listing) {
     const [commuteTimes, details] = await Promise.all([
       getCommuteTimes(listing.lat, listing.lon),
       getListingDetails(listingID)
-      ]);
-    const priceRegex = /£(?<price>[\d,]+) pcm/;
-    const price = Number(details.description
-      .match(priceRegex).groups.price
-      .replace(/,/g, ''));
+    ]);
     return {
       listingID,
+      link: getListingURL(listingID),
       latitude: listing.lat,
       longitude: listing.lon,
-      summary: details.name.replace(' to rent', ''),
-      price,
-      ...commuteTimes,
-      locality: details.address.addressLocality,
-      link: getListingURL(listingID),
-      photos: details.photo.map(imgObject => imgObject.contentUrl),
-      updated: new Date()
+      ...details,
+      ...commuteTimes
     };
-  }, path.join('processed', `${listingID}.json`), listingMaxAgeHours);
+  }, path.join('processed', `${listingID}.json`), proccessedListingMaxAgeHours);
 }
 
 async function importListings(db) {
@@ -160,22 +188,22 @@ async function importListings(db) {
   const listings = await getListings();
   const listingsCol = db.collection('listings');
 
-  logger.info('Processing listings');
-  const proccessedListings = await Promise.all(
-    listings.map(listing => processZooplaListing(listing)));
-
   logger.info('Marking propeties not in the response as removed');
-  const currentListingIDs = proccessedListings.map(listing => listing.listingID);
-  listingsCol.updateMany(
+  const currentListingIDs = listings.map(listing => listing.listing_id);
+  await listingsCol.updateMany(
     { listingID: { $nin: currentListingIDs } },
-    { $set: { removed: true } });
+    { $set: { removed: true } }
+  );
 
-  logger.info('Updating listing data in db');
-  await Promise.all(proccessedListings.map(listing => listingsCol.updateOne(
+  logger.info('Processing listings & updating listing data in DB');
+  await Promise.all(listings.map(async rawListing => {
+    const listing = await processZooplaListing(rawListing);
+    await listingsCol.updateOne(
       { listingID: listing.listingID },
-      { $set: { ...listing, removed: false } },
+      { $set: { ...listing, removed: false, updated: new Date() } },
       { upsert: true }
-  )));
+    );
+  }));
 }
 
 async function main() {
