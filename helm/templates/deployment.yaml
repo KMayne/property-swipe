@@ -24,7 +24,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
         - name: PS_VERSION
-          value: {{ .Values.image.tag }}
+          value: {{ .Values.image.tag | quote }}
         ports:
           - name: http
             containerPort: {{ .Values.port }}
