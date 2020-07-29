@@ -191,8 +191,8 @@ async function importListings(db) {
   logger.info('Marking propeties not in the response as removed');
   const currentListingIDs = listings.map(listing => listing.listing_id);
   await listingsCol.updateMany(
-    { listingID: { $nin: currentListingIDs } },
-    { $set: { removed: true } }
+    { listingID: { $nin: currentListingIDs }, removed: false },
+    { $set: { removed: true, removedDate: new Date() } }
   );
 
   logger.info('Processing listings & updating listing data in DB');
@@ -200,7 +200,10 @@ async function importListings(db) {
     const listing = await processZooplaListing(rawListing);
     await listingsCol.updateOne(
       { listingID: listing.listingID },
-      { $set: { ...listing, removed: false, updated: new Date() } },
+      {
+        $set: { ...listing, removed: false, updatedDate: new Date() },
+        $setOnInsert: { insertedDate: new Date() }
+      },
       { upsert: true }
     );
   }));
