@@ -6,7 +6,6 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const Bottleneck = require('bottleneck');
 const MapsClient = require("@googlemaps/google-maps-services-js").Client;
-const winston = require('winston');
 const moment = require('moment');
 
 const dbClient = require('./dbConnection');

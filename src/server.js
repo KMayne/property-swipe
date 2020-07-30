@@ -3,7 +3,6 @@
 const http = require('http');
 const express = require('express');
 const history = require('connect-history-api-fallback');
-const winston = require('winston');
 const { promisify } = require('util');
 const crypto = require('crypto');
 
