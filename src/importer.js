@@ -17,7 +17,10 @@ const dataDir = path.resolve(path.dirname(require.main.filename), '..', 'data');
 const mapsClient = new MapsClient();
 const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.simple(),
+  format: winston.format.combine(
+    winston.format.colorize(),
+    winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
+  ),
   transports: [new winston.transports.Console({
     stderrLevels: ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']
   })]
