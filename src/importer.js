@@ -20,9 +20,13 @@ const limiter = new Bottleneck({
 });
 const rateLimitedFetch = limiter.wrap(fetch);
 
-const mapPageMaxAgeHours = 0.5;
+const listingIdPageMaxAgeHours = 0.25;
 const listingMaxAgeHours = 48;
 const proccessedListingMaxAgeHours = listingMaxAgeHours;
+const requestPageSize = 48;
+// Used to control processed listing cache
+const processedDataVersion = 1;
+const maxGridPages = Math.floor(secrets.maxProperties / requestPageSize);
 
 async function cached(func, cacheFileName, maxAgeHours) {
   const maxAgeMillis = maxAgeHours * 60 * 60 * 1000;
@@ -51,20 +55,21 @@ async function getListingsFromGridPage(pageNumber) {
       ...secrets.listZooplaQuery,
       "results_sort": "newest_listings",
       "view_type": "grid",
-      "page_size": 48,
+      "page_size": requestPageSize,
       "pn": pageNumber
     }).forEach(([key, value]) => params.set(key, value));
     const searchUrl = `https://www.zoopla.co.uk/to-rent/property/${secrets.listZooplaQuery.q.toLowerCase().replace(' ', '-')}/?${params.toString()}`;
+    if (pageNumber === 0) logger.info(`Example URL: ${searchUrl}`);
     const responseText = await cached(async () => {
       try {
         const gridPage = await rateLimitedFetch(searchUrl);
-        logger.info(`Fetched listings grid page ${pageNumber} of ${secrets.maxPages}`);
+        logger.info(`Fetched listings grid page ${pageNumber + 1} of ${maxGridPages}`);
         return await gridPage.text();
       } catch (e) {
         logger.error(e);
         return '';
       }
-    }, path.join('listing-pages', `${pageNumber}.html`), 0.1);
+    }, path.join('listing-grid-pages', `${pageNumber}.html`), listingIdPageMaxAgeHours);
     const dom = new JSDOM(responseText);
     const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));
     const dataScript =
@@ -84,18 +89,25 @@ async function getListingsFromGridPage(pageNumber) {
 }
 
 async function getListingsFromGrid() {
-  const gridListingIdsPromises = [];
-  for (let i = 1; i <= secrets.maxPages; i++) {
-    gridListingIdsPromises.push(getListingsFromGridPage(i));
-  }
-  return (await Promise.all(gridListingIdsPromises)).flat();
+  return cached(async () => {
+    logger.info('Fetching listing grid pages to extract listing IDs');
+    const gridListingIdsPromises = [];
+    for (let i = 0; i < maxGridPages; i++) {
+      gridListingIdsPromises.push(getListingsFromGridPage(i));
+    }
+    return (await Promise.all(gridListingIdsPromises)).flat();
+  }, 'listings.json', listingIdPageMaxAgeHours / 2);
+}
+
+function getListingURL(listingID) {
+  return `https://www.zoopla.co.uk/to-rent/details/${listingID}`;
 }
 
 async function fetchListingDetailsPage(listingID) {
   return cached(async () => {
-    const listingUrl = `https://www.zoopla.co.uk/to-rent/details/${listingID}`;
-    const response = await rateLimitedFetch(listingUrl);
-    logger.info('Fetched property details page for ' + listingID);
+    const listingUrl = getListingURL(listingID);
+    const response = await rateLimitedFetch(getListingURL(listingID));
+    logger.info(`Fetched property details page for ${listingID}`);
     if (!response.ok) {
       throw new Error(`Error retrieving response for ${listingID}. `
         + `Status code ${response.status}, response: ${await response.text()}`);
@@ -111,86 +123,88 @@ function parsePrice(priceStr) {
 
 async function getListingDetails(listingID) {
   const jsonLDSelector = 'script[type="application/ld+json"]';
-  return cached(async () => {
-    const listingPageText = await fetchListingDetailsPage(listingID);
-    logger.info('Parsing property details page for ' + listingID);
-    const dom = new JSDOM(listingPageText);
-    const document = dom.window.document;
-    const jsonLdElems = document.querySelectorAll(jsonLDSelector);
-    const jsonMetadata = Array.from(jsonLdElems)
-      .map(scriptElem => JSON.parse(scriptElem.text)['@graph'])
-      .filter(g => g !== undefined)
-      .flat()
-      .find(entry => entry['@type'] === "Residence");
+  const listingPageText = await fetchListingDetailsPage(listingID);
+  logger.info('Parsing property details page for ' + listingID);
+  const dom = new JSDOM(listingPageText);
+  const document = dom.window.document;
+  const jsonLdElems = document.querySelectorAll(jsonLDSelector);
+  const jsonMetadata = Array.from(jsonLdElems)
+    .map(scriptElem => JSON.parse(scriptElem.text)['@graph'])
+    .filter(g => g !== undefined)
+    .flat()
+    .find(entry => entry['@type'] === "Residence");
 
-    const featureListElem = document.querySelector('.dp-features-list--bullets');
-    let photos = [
-      ...jsonMetadata.photo.map(imgObject => imgObject.contentUrl),
-      ...(Array.from(document.querySelectorAll('.ui-modal-gallery__asset--center-content'))
-        .map(galleryContent => galleryContent.style.backgroundImage.match(/url\((?<url>.+)\)/)?.groups.url))
-    ];
+  const featureListElem = document.querySelector('.dp-features-list--bullets');
+  let photos = [
+    ...jsonMetadata.photo.map(imgObject => imgObject.contentUrl),
+    ...(Array.from(document.querySelectorAll('.ui-modal-gallery__asset--center-content'))
+      .map(galleryContent => galleryContent.style.backgroundImage.match(/url\((?<url>.+)\)/)?.groups.url))
+  ];
 
-    const marketPriceElem = document.querySelector('.dp-market-stats__price');
-    const headlines =
-      Array.from((document.querySelector('.dp-features-list--counts') || new Node())
-        .querySelectorAll('.dp-features-list__text')).map(elem => elem.textContent.trim())
-        .map(headline => headline.match(/(?<num>\d+) (?<name>[a-zA-Z ]+ room)(?:s)?/));
+  const marketPriceElem = document.querySelector('.dp-market-stats__price');
+  const headlines =
+    Array.from((document.querySelector('.dp-features-list--counts') || new Node())
+      .querySelectorAll('.dp-features-list__text')).map(elem => elem.textContent.trim())
+      .map(headline => headline.match(/(?<num>\d+) (?<name>[a-zA-Z ]+ room)(?:s)?/));
 
-    return {
-      summary: jsonMetadata.name.replace(' to rent', ''),
-      price: parsePrice(jsonMetadata.description),
-      locality: jsonMetadata.address.addressLocality,
-      description: document.querySelector('.dp-description__text').textContent.trim(),
-      photos,
-      priceHistory: Array.from(document.querySelectorAll('.dp-price-history__item'))
-        .map(item => ({
-          date: moment(item.querySelector('.dp-price-history__item-date').textContent, 'Do MMM YYYY').toDate(),
-          price: parsePrice(item.querySelector('.dp-price-history__item-price').textContent)
-        })),
-      features: featureListElem === null ? [] : Array.from(featureListElem.querySelectorAll('.dp-features-list__item')).map(elem => elem.textContent.trim()),
-      viewCount: Number(document.querySelector('.dp-view-count__legend').textContent.match(/(?<viewCount>\d+) page views/).groups.viewCount),
-      avgAreaPrice: marketPriceElem === null ? null : parsePrice(marketPriceElem.textContent)
-    };
-  }, path.join('details-json', `${listingID}.json`), proccessedListingMaxAgeHours);
+  const descriptionElem = document.querySelector('.dp-description__text');
+  const descriptionText = descriptionElem
+    ? descriptionElem.textContent.trim()
+    : (logger.warn(`Missing description for ${listingID}`), '');
+
+  return {
+    summary: jsonMetadata.name.replace(' to rent', ''),
+    price: parsePrice(jsonMetadata.description),
+    locality: jsonMetadata.address.addressLocality,
+    latitude: jsonMetadata.geo.latitude,
+    longitude: jsonMetadata.geo.longitude,
+    description: descriptionText,
+    photos,
+    priceHistory: Array.from(document.querySelectorAll('.dp-price-history__item'))
+      .map(item => ({
+        date: moment(item.querySelector('.dp-price-history__item-date').textContent, 'Do MMM YYYY').toDate(),
+        price: parsePrice(item.querySelector('.dp-price-history__item-price').textContent)
+      })),
+    features: featureListElem === null ? [] : Array.from(featureListElem.querySelectorAll('.dp-features-list__item')).map(elem => elem.textContent.trim()),
+    viewCount: Number(document.querySelector('.dp-view-count__legend').textContent.match(/(?<viewCount>\d+) page views/).groups.viewCount),
+    avgAreaPrice: marketPriceElem === null ? null : parsePrice(marketPriceElem.textContent)
+  };
 }
 
 async function getCommuteTimes(latitude, longitude) {
-  const query = {
-    origins: [`${latitude},${longitude}`],
-    destinations: [secrets.workLocation],
-    key: secrets.mapsAPIKey,
-    // 9am next Monday
-    arrival_time: moment().day(8).hours(9).minutes(0).seconds(0).millisecond(0).unix(),
-    units: 'metric'
-  };
+  return cached(async () => {
+    const query = {
+      origins: [`${latitude},${longitude}`],
+      destinations: [secrets.workLocation],
+      key: secrets.mapsAPIKey,
+      // 9am next Monday
+      arrival_time: moment().day(8).hours(9).minutes(0).seconds(0).millisecond(0).unix(),
+      units: 'metric'
+    };
 
-  const [transitCommuteMins, bikeCommuteMins] = (await Promise.all([
-    mapsClient.distancematrix({ params: { ...query, mode: 'transit' }}),
-    mapsClient.distancematrix({ params: { ...query, mode: 'bicycling' }}),
-  ])).map(response => {
-    const commuteTime = response.data.rows[0].elements[0];
-    if (commuteTime.status !== 'OK') return null;
-    return Math.round(commuteTime.duration.value / 60);
-  });
-  return { transitCommuteMins, bikeCommuteMins };
+    const [transitCommuteMins, bikeCommuteMins] = (await Promise.all([
+      mapsClient.distancematrix({ params: { ...query, mode: 'transit' }}),
+      mapsClient.distancematrix({ params: { ...query, mode: 'bicycling' }}),
+    ])).map(response => {
+      const commuteTime = response.data.rows[0].elements[0];
+      if (commuteTime.status !== 'OK') return null;
+      return Math.round(commuteTime.duration.value / 60);
+    });
+    return { transitCommuteMins, bikeCommuteMins };
+  }, path.join('commute-times', `${latitude},${longitude}`), 168);
 }
 
-async function processZooplaListing(listing) {
-  const listingID = listing.listing_id;
+async function processZooplaListing(listingID) {
   return cached(async () => {
-    const [commuteTimes, details] = await Promise.all([
-      getCommuteTimes(listing.lat, listing.lon),
-      getListingDetails(listingID)
-    ]);
+    const details = await getListingDetails(listingID);
+    const commuteTimes = await getCommuteTimes(details.latitude, details.longitude);
     return {
       listingID,
       link: getListingURL(listingID),
-      latitude: listing.lat,
-      longitude: listing.lon,
       ...details,
       ...commuteTimes
     };
-  }, path.join('processed', `${listingID}.json`), proccessedListingMaxAgeHours);
+  }, path.join('processed', `${listingID}-v${processedDataVersion}.json`), proccessedListingMaxAgeHours);
 }
 
 async function importListings(db) {
