@@ -15,16 +15,7 @@ const secrets = require('./secrets.json');
 const dataDir = path.resolve(path.dirname(require.main.filename), '..', 'data');
 
 const mapsClient = new MapsClient();
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.colorize(),
-    winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
-  ),
-  transports: [new winston.transports.Console({
-    stderrLevels: ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']
-  })]
-});
+const logger = require('./logger');
 const limiter = new Bottleneck({
   minTime: 1000
 });
@@ -66,9 +57,14 @@ async function getListingsFromGridPage(pageNumber) {
     }).forEach(([key, value]) => params.set(key, value));
     const searchUrl = `https://www.zoopla.co.uk/to-rent/property/${secrets.listZooplaQuery.q.toLowerCase().replace(' ', '-')}/?${params.toString()}`;
     const responseText = await cached(async () => {
-      const gridPage = await rateLimitedFetch(searchUrl);
-      logger.info(`Fetched listings grid page ${pageNumber} of ${secrets.maxPages}`);
-      return await gridPage.text();
+      try {
+        const gridPage = await rateLimitedFetch(searchUrl);
+        logger.info(`Fetched listings grid page ${pageNumber} of ${secrets.maxPages}`);
+        return await gridPage.text();
+      } catch (e) {
+        logger.error(e);
+        return '';
+      }
     }, path.join('listing-pages', `${pageNumber}.html`), 0.1);
     const dom = new JSDOM(responseText);
     const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));

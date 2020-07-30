@@ -10,16 +10,8 @@ const crypto = require('crypto');
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
 const apiRouter = require('./api');
+const logger = require('./logger');
 const secrets = require('./secrets.json');
-
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.colorize({ all: true }),
-    winston.format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
-  ),
-  transports: new winston.transports.Console(),
-});
 
 // Initialise app
 const app = express();
