@@ -55,40 +55,52 @@ async function cached(func, cacheFileName, maxAgeHours) {
   }
 }
 
-async function getMapPage() {
-  return cached(async () => {
-    logger.info('Fetching map page');
-    const response = await rateLimitedFetch(secrets.zooplaSearchURL);
-    return response.text();
-  }, 'map.html', mapPageMaxAgeHours);
-}
-
-async function getListings() {
-  return cached(async () => {
-    const dom = new JSDOM(await getMapPage());
-    logger.info('Parsing map page for listings');
+async function getListingsFromGridPage(pageNumber) {
+    const params = new URLSearchParams();
+    Object.entries({
+      ...secrets.listZooplaQuery,
+      "results_sort": "newest_listings",
+      "view_type": "grid",
+      "page_size": 48,
+      "pn": pageNumber
+    }).forEach(([key, value]) => params.set(key, value));
+    const searchUrl = `https://www.zoopla.co.uk/to-rent/property/${secrets.listZooplaQuery.q.toLowerCase().replace(' ', '-')}/?${params.toString()}`;
+    const responseText = await cached(async () => {
+      const gridPage = await rateLimitedFetch(searchUrl);
+      logger.info(`Fetched listings grid page ${pageNumber} of ${secrets.maxPages}`);
+      return await gridPage.text();
+    }, path.join('listing-pages', `${pageNumber}.html`), 0.1);
+    const dom = new JSDOM(responseText);
     const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));
     const dataScript =
       scriptElems
       .map(s => s.text)
-      .find(s => s.includes('listing_id') && s.includes('var data'));
+      .find(s => s.includes('/ajax/listings/travel-time'));
     if (!dataScript) {
-      throw new Error('Could not find script containing listing data');
+      logger.error(`Could not find script containing listing data for page ${pageNumber}`);
+      return [];
     }
-    const listingArrayRegex = /var data = \{(?:\n|.)+listings: (?<listings>\[.+\])/;
-    return JSON.parse(dataScript.match(listingArrayRegex).groups.listings);
-  }, 'listings.json', mapPageMaxAgeHours);
+    const listingsArrayMatch = dataScript.match(/var data = \{(?:\n|.)+"listing_id":(?<listings>\[.+\])/);
+    if (!listingsArrayMatch) {
+      logger.error(`Could not find listings array in page ${pageNumber}`);
+      return [];
+    }
+    return JSON.parse(listingsArrayMatch.groups.listings).map(Number);
 }
 
-function getListingURL(listingID) {
-  return `https://www.zoopla.co.uk/to-rent/details/${listingID}`
+async function getListingsFromGrid() {
+  const gridListingIdsPromises = [];
+  for (let i = 1; i <= secrets.maxPages; i++) {
+    gridListingIdsPromises.push(getListingsFromGridPage(i));
+  }
+  return (await Promise.all(gridListingIdsPromises)).flat();
 }
 
 async function fetchListingDetailsPage(listingID) {
   return cached(async () => {
-    logger.info('Fetching property details page for ' + listingID);
-    const listingUrl = getListingURL(listingID);
+    const listingUrl = `https://www.zoopla.co.uk/to-rent/details/${listingID}`;
     const response = await rateLimitedFetch(listingUrl);
+    logger.info('Fetched property details page for ' + listingID);
     if (!response.ok) {
       throw new Error(`Error retrieving response for ${listingID}. `
         + `Status code ${response.status}, response: ${await response.text()}`);
@@ -188,7 +200,13 @@ async function processZooplaListing(listing) {
 
 async function importListings(db) {
   logger.info('Getting listings')
-  const listings = await getListings();
+  const listings = await getListingsFromGrid();
+  if (listings.length < 1) {
+    logger.error('Found 0 listings. Not updating database');
+    return;
+  }
+
+  logger.info(`Found ${listings.length} listings in total`);
   const listingsCol = db.collection('listings');
 
   logger.info('Marking propeties not in the response as removed');
