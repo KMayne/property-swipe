@@ -21,16 +21,15 @@ router.get('/listings', async (req, res) => {
   const user = await usersCol.findOne({ username: 'kian' });
   const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
 
-  const query = {
+  const nonSeenProperties = await listingsCol.find({
     listingID: { $nin: seenProperties },
     removed: false,
     // Properties < 45 mins away from work
     transitCommuteMins: { $lt: 45 },
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
-  };
-  const sort = ['transitCommuteMins', 'price'];
-  const nonSeenProperties = await listingsCol.find(query, { sort });
+  // Most recently updated price, price low to high
+  }, { sort: { 'priceHistory.0.date': -1, price: 1 } });
   res.json(await nonSeenProperties.toArray());
 });
 
