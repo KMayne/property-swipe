@@ -24,6 +24,8 @@ const listingIdPageMaxAgeHours = 0.25;
 const listingMaxAgeHours = 48;
 const proccessedListingMaxAgeHours = listingMaxAgeHours;
 const requestPageSize = 48;
+// 180 day expiry
+const commuteTimeMaxAgeHours = 24 * 180;
 // Used to control processed listing cache
 const processedDataVersion = 1;
 const maxGridPages = Math.floor(secrets.maxProperties / requestPageSize);
@@ -171,7 +173,7 @@ async function getListingDetails(listingID) {
   };
 }
 
-async function getCommuteTimes(latitude, longitude) {
+function getCommuteTimes(latitude, longitude) {
   return cached(async () => {
     const query = {
       origins: [`${latitude},${longitude}`],
@@ -191,7 +193,7 @@ async function getCommuteTimes(latitude, longitude) {
       return Math.round(commuteTime.duration.value / 60);
     });
     return { transitCommuteMins, bikeCommuteMins };
-  }, path.join('commute-times', `${latitude},${longitude}`), 168);
+  }, path.join('commute-times', `${latitude},${longitude}`), commuteTimeMaxAgeHours);
 }
 
 async function processZooplaListing(listingID) {
