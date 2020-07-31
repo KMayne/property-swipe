@@ -21,10 +21,23 @@ router.get('/listings', async (req, res) => {
   const user = await usersCol.findOne({ username: 'kian' });
   const seenProperties = [...user.starred, ...user.accepted, ...user.rejected];
 
-  const query = { listingID: { $nin: seenProperties }, removed: false };
+  const query = {
+    listingID: { $nin: seenProperties },
+    removed: false,
+    // Properties < 45 mins away from work
+    transitCommuteMins: { $lt: 45 },
+    // Properties with at least 3 photos
+    'photos.2': { $exists: true }
+  };
   const sort = ['transitCommuteMins', 'price'];
   const nonSeenProperties = await listingsCol.find(query, { sort });
   res.json(await nonSeenProperties.toArray());
+});
+
+router.get('/available', async (req, res) => {
+  const listingsCol = req.app.db.collection('listings');
+  const availableProperties = await listingsCol.find({ removed: false });
+  res.json((await availableProperties.toArray()).map(listing => listing.listingID));
 });
 
 router.get('/user', async (req, res) => {

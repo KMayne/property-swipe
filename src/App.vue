@@ -1,7 +1,17 @@
 <template>
   <div id="app">
     <md-toolbar><h1>Property Swiper</h1></md-toolbar>
-    <section v-if="listing !== undefined">
+    <section v-if="user !== undefined && onShortlistPage">
+      <h2>Starred</h2>
+      <ul class="shortlist">
+        <li v-for="listingID in user.starred"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+      </ul>
+      <h2>Accepted</h2>
+      <ul class="shortlist">
+        <li v-for="listingID in user.accepted"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+      </ul>
+    </section>
+    <section v-if="!onShortlistPage && listing !== undefined">
       <carousel :perPage="1" :navigateTo="slideNum" @page-change="page => slideNum = page">
         <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
           <img class="photo" :src="photoUrl">
@@ -43,7 +53,7 @@
       </div>
       <p>{{listings.length}} properties remaining</p>
     </section>
-    <h2 v-else>
+    <h2 v-if="!onShortlistPage && listing === undefined">
       No listings
     </h2>
   </div>
@@ -94,6 +104,11 @@ export default Vue.extend({
     user: undefined,
     slideNum: [0, false]
   } as AppState),
+  computed: {
+    onShortlistPage(): boolean {
+      return location.pathname === '/shortlist';
+    }
+  },
   mounted() {
     const query = location.search.substring(1);
     if (query.substr(0, 4) === 'key=') {
@@ -212,6 +227,14 @@ ul {
   padding: 8px;
   max-width: 800px;
   margin: auto;
+}
+
+ul.shortlist {
+  margin: 1rem;
+}
+
+h2 {
+  margin: 0.8rem;
 }
 
 li.heading {
