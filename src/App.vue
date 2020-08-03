@@ -30,6 +30,10 @@
           {{listing.bikeCommuteMins}} minutes to work via bike
         </li>
         <li>
+          <i class="material-icons"> update </i>
+          Price last updated {{lastUpdatedDateString}}
+        </li>
+        <li>
           <i class="material-icons"> link </i>
           <a :href="listing.link" rel="nofollow" target="_blank">{{listing.link}}</a>
         </li>
@@ -62,6 +66,8 @@
 <script lang="ts">
 import Vue from 'vue';
 import { Carousel, Slide } from 'vue-carousel';
+import moment from 'moment';
+moment.locale('en-gb');
 
 interface Listing {
   listingID: string;
@@ -72,6 +78,12 @@ interface Listing {
   bikeCommuteMins: number;
   photoUrl: string;
   link: string;
+  priceHistory: HistoricPrice[];
+}
+
+interface HistoricPrice {
+  date: string;
+  price: number;
 }
 
 interface User {
@@ -107,6 +119,9 @@ export default Vue.extend({
   computed: {
     onShortlistPage(): boolean {
       return location.pathname === '/shortlist';
+    },
+    lastUpdatedDateString(): string {
+      return moment(this.listing?.priceHistory[0].date).format('L');
     }
   },
   mounted() {
