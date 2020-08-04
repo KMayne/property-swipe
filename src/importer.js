@@ -229,15 +229,19 @@ async function importListings(db) {
 
   logger.info('Processing listings & updating listing data in DB');
   await Promise.all(listings.map(async rawListing => {
-    const listing = await processZooplaListing(rawListing);
-    await listingsCol.updateOne(
-      { listingID: listing.listingID },
-      {
-        $set: { ...listing, removed: false, updatedDate: new Date() },
-        $setOnInsert: { insertedDate: new Date() }
-      },
-      { upsert: true }
-    );
+    try {
+      const listing = await processZooplaListing(rawListing);
+      await listingsCol.updateOne(
+        { listingID: listing.listingID },
+        {
+          $set: { ...listing, removed: false, updatedDate: new Date() },
+          $setOnInsert: { insertedDate: new Date() }
+        },
+        { upsert: true }
+      );
+    } catch (err) {
+      logger.warn(`Error processing property ${rawListing}: ${err}`);
+    }
   }));
 }
 
