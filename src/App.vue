@@ -12,11 +12,6 @@
       </ul>
     </section>
     <section v-if="!onShortlistPage && listing !== undefined">
-      <carousel :perPage="1" :navigateTo="slideNum" @page-change="page => slideNum = page">
-        <slide v-for="photoUrl in listing.photos" class="photo-slide" :key="photoUrl">
-          <img class="photo" :src="photoUrl">
-        </slide>
-      </carousel>
       <ul>
         <li class="heading">
           £{{listing.price}} pcm - {{listing.summary}} - {{listing.locality}}
@@ -38,6 +33,9 @@
           <a :href="listing.link" rel="nofollow" target="_blank">{{listing.link}}</a>
         </li>
       </ul>
+      <section class="photos">
+        <img v-for="photoUrl in listing.photos" :key="photoUrl" class="photo" :src="photoUrl">
+      </section>
       <div class="actions">
         <md-button
           @click="undoClicked"
@@ -223,18 +221,11 @@ html {
   margin-bottom: 16px;
 }
 
-.photo-slide {
-  text-align: center;
-}
-
 img.photo {
-  max-width: 100%;
-}
-
-.VueCarousel-pagination {
-  position: relative;
-  top: -90px;
-  height: 0;
+  margin: auto;
+  max-height: 50%;
+  display: block;
+  padding: 8px;
 }
 
 ul {
