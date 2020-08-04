@@ -223,7 +223,8 @@ html {
 
 img.photo {
   margin: auto;
-  max-height: 50%;
+  max-height: 60vh;
+  max-width: 80vw;
   display: block;
   padding: 8px;
 }
