@@ -24,8 +24,10 @@ router.get('/listings', async (req, res) => {
   const nonSeenProperties = await listingsCol.find({
     listingID: { $nin: seenProperties },
     removed: false,
-    // Properties < 45 mins away from work
-    transitCommuteMins: { $lt: 45 },
+    // Allow the user to specify a regex on properties
+    description: (secrets.descriptionRegex ? { $regex: secrets.descriptionRegex, $options: 'i' } : { $exists: true }),
+    // Properties < maxCommuteMins mins away from work
+    transitCommuteMins: { $lt: secrets.maxCommuteMins },
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
   // Most recently updated price, price low to high
