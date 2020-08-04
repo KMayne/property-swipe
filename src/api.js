@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const secrets = require('./secrets.json');
 
 router.get('/version', (req, res) => {
   res.json({ version: process.env.PS_VERSION || 'UNVERSIONED' });
