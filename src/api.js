@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const secrets = require('./secrets.json');
 
+const moveDate = new Date(secrets.moveDate);
+
 router.get('/version', (req, res) => {
   res.json({ version: process.env.PS_VERSION || 'UNVERSIONED' });
 });
@@ -29,6 +31,8 @@ router.get('/listings', async (req, res) => {
     description: (secrets.descriptionRegex ? { $regex: secrets.descriptionRegex, $options: 'i' } : { $exists: true }),
     // Properties < maxCommuteMins mins away from work
     transitCommuteMins: { $lt: secrets.maxCommuteMins },
+    // Properties with no available date or available on or before move in date
+    $or: [ { available: { $exists: false } }, { available: { $lte: moveDate } } ]
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
   // Most recently updated price, price low to high

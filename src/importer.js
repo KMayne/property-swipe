@@ -27,7 +27,7 @@ const requestPageSize = 48;
 // 180 day expiry
 const commuteTimeMaxAgeHours = 24 * 180;
 // Used to control processed listing cache
-const processedDataVersion = 1;
+const processedDataVersion = 2;
 const maxGridPages = Math.floor(secrets.maxProperties / requestPageSize);
 
 async function cached(func, cacheFileName, maxAgeHours) {
@@ -136,7 +136,6 @@ async function getListingDetails(listingID) {
     .flat()
     .find(entry => entry['@type'] === "Residence");
 
-  const featureListElem = document.querySelector('.dp-features-list--bullets');
   let photos = [
     ...jsonMetadata.photo.map(imgObject => imgObject.contentUrl),
     ...(Array.from(document.querySelectorAll('.ui-modal-gallery__asset--center-content'))
@@ -154,6 +153,10 @@ async function getListingDetails(listingID) {
     ? descriptionElem.textContent.trim()
     : (logger.warn(`Missing description for ${listingID}`), '');
 
+  const features = Array.from(document.querySelectorAll(':not(.dp-features-list--counts) > .dp-features-list__item'))
+    .map(elem => elem.textContent.trim());
+  const availableDateStr = features.map(f => f.match(/^Available from (?<date>.+)/)).find(match => match !== null)?.groups.date;
+
   return {
     summary: jsonMetadata.name.replace(' to rent', ''),
     price: parsePrice(jsonMetadata.description),
@@ -161,13 +164,15 @@ async function getListingDetails(listingID) {
     latitude: jsonMetadata.geo.latitude,
     longitude: jsonMetadata.geo.longitude,
     description: descriptionText,
+    headlines,
     photos,
     priceHistory: Array.from(document.querySelectorAll('.dp-price-history__item'))
       .map(item => ({
         date: moment(item.querySelector('.dp-price-history__item-date').textContent, 'Do MMM YYYY').toDate(),
         price: parsePrice(item.querySelector('.dp-price-history__item-price').textContent)
       })),
-    features: featureListElem === null ? [] : Array.from(featureListElem.querySelectorAll('.dp-features-list__item')).map(elem => elem.textContent.trim()),
+    features,
+    available: availableDateStr ? moment(availableDateStr, 'Do MMM YYYY').toDate() : undefined,
     viewCount: Number(document.querySelector('.dp-view-count__legend').textContent.match(/(?<viewCount>\d+) page views/).groups.viewCount),
     avgAreaPrice: marketPriceElem === null ? null : parsePrice(marketPriceElem.textContent)
   };
