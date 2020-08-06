@@ -32,7 +32,7 @@ router.get('/listings', async (req, res) => {
     // Properties < maxCommuteMins mins away from work
     transitCommuteMins: { $lt: secrets.maxCommuteMins },
     // Properties with no available date or available on or before move in date
-    $or: [ { available: { $exists: false } }, { available: { $lte: moveDate } } ],
+    $or: [ { available: { $exists: false } }, { available: { $eq: null } }, { available: { $lte: moveDate } } ],
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
   // Most recently updated price, price low to high
