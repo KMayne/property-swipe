@@ -25,9 +25,9 @@ dbConnection.connect()
     function updateListings() {
       importListings(db).then(() => logger.info('Listings updated'));
     }
-    // Import listings from Zoopla into DB at startup & every hour after
+    // Import listings from Zoopla into DB at startup & every 3 hours after
     updateListings();
-    setInterval(updateListings, 3600 * 1000);
+    setInterval(updateListings, 3 * 3600 * 1000);
     app.db = db;
     app.emit('ready');
   });
