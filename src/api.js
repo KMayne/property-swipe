@@ -37,7 +37,7 @@ router.get('/listings', async (req, res) => {
     'photos.2': { $exists: true }
   }, {
     //  Sort price high -> low
-    sort: { price: 1 }
+    sort: { price: -1 }
   });
   res.json(await nonSeenProperties.toArray());
 });
