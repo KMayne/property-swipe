@@ -73,21 +73,9 @@ async function getListingsFromGridPage(pageNumber) {
       }
     }, path.join('listing-grid-pages', `${pageNumber}.html`), listingIdPageMaxAgeHours);
     const dom = new JSDOM(responseText);
-    const scriptElems = Array.from(dom.window.document.querySelectorAll('script'));
-    const dataScript =
-      scriptElems
-      .map(s => s.text)
-      .find(s => s.includes('/ajax/listings/travel-time'));
-    if (!dataScript) {
-      logger.error(`Could not find script containing listing data for page ${pageNumber}`);
-      return [];
-    }
-    const listingsArrayMatch = dataScript.match(/var data = \{(?:\n|.)+"listing_id":(?<listings>\[.+\])/);
-    if (!listingsArrayMatch) {
-      logger.error(`Could not find listings array in page ${pageNumber}`);
-      return [];
-    }
-    return JSON.parse(listingsArrayMatch.groups.listings).map(Number);
+    const divIdPrefix = 'listing_';
+    return Array.from(dom.window.document.querySelectorAll(`div[id^=${divIdPrefix}]`))
+      .map(div => Number(div.id.slice(divIdPrefix.length)));
 }
 
 async function getListingsFromGrid() {
