@@ -95,7 +95,6 @@ function getListingURL(listingID) {
 
 async function fetchListingDetailsPage(listingID) {
   return cached(async () => {
-    const listingUrl = getListingURL(listingID);
     const response = await rateLimitedFetch(getListingURL(listingID));
     logger.info(`Fetched property details page for ${listingID}`);
     if (!response.ok) {
@@ -130,20 +129,15 @@ async function getListingDetails(listingID) {
       .map(galleryContent => galleryContent.style.backgroundImage.match(/url\((?<url>.+)\)/)?.groups.url))
   ];
 
-  const marketPriceElem = document.querySelector('.dp-market-stats__price');
-  const headlines =
-    Array.from((document.querySelector('.dp-features-list--counts') || new Node())
-      .querySelectorAll('.dp-features-list__text')).map(elem => elem.textContent.trim())
-      .map(headline => headline.match(/(?<num>\d+) (?<name>[a-zA-Z ]+ room)(?:s)?/));
-
-  const descriptionElem = document.querySelector('.dp-description__text');
+  const descriptionElem = document.querySelector('div[data-testid="listing_description"]');
   const descriptionText = descriptionElem
     ? descriptionElem.textContent.trim()
     : (logger.warn(`Missing description for ${listingID}`), '');
 
-  const features = Array.from(document.querySelectorAll(':not(.dp-features-list--counts) > .dp-features-list__item'))
-    .map(elem => elem.textContent.trim());
-  const availableDateStr = features.map(f => f.match(/^Available from (?<date>.+)/)).find(match => match !== null)?.groups.date;
+  const features = Array.from(document.querySelectorAll('ul[data-testid="listing_features_bulletted"] > li'))
+    .map(li => li.textContent);
+  const availableDateStr = document.querySelector('span[data-testid="availability"]')?.textContent
+    .match(/^Available from (?<date>.+)/)?.groups.date || null;
 
   return {
     summary: jsonMetadata.name.replace(' to rent', ''),
@@ -152,17 +146,13 @@ async function getListingDetails(listingID) {
     latitude: jsonMetadata.geo.latitude,
     longitude: jsonMetadata.geo.longitude,
     description: descriptionText,
-    headlines,
+    bedCount: Number(document.querySelector('span[data-testid="beds-label"]')?.textContent.split(' ')[0] || 'NaN'),
+    bathCount: Number(document.querySelector('span[data-testid="baths-label"]')?.textContent.split(' ')[0] || 'NaN'),
     photos,
-    priceHistory: Array.from(document.querySelectorAll('.dp-price-history__item'))
-      .map(item => ({
-        date: moment(item.querySelector('.dp-price-history__item-date').textContent, 'Do MMM YYYY').toDate(),
-        price: parsePrice(item.querySelector('.dp-price-history__item-price').textContent)
-      })),
     features,
     available: availableDateStr ? moment(availableDateStr, 'Do MMM YYYY').toDate() : undefined,
-    viewCount: Number(document.querySelector('.dp-view-count__legend').textContent.match(/(?<viewCount>\d+) page views/).groups.viewCount),
-    avgAreaPrice: marketPriceElem === null ? null : parsePrice(marketPriceElem.textContent)
+    viewCount: NaN,
+    avgAreaPrice: null
   };
 }
 
