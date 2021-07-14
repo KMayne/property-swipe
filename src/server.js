@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const http = require('http');
+const path = require('path');
 const express = require('express');
 const history = require('connect-history-api-fallback');
 const { promisify } = require('util');
@@ -75,7 +76,7 @@ app.on('ready', () => {
   } else {
     require('greenlock-express')
     .init({
-        packageRoot: __dirname,
+        packageRoot: path.resolve(__dirname, '..'),
         maintainerEmail: "property-swipe@kianmayne.co.uk",
         configDir: './greenlock.d',
         cluster: false
