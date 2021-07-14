@@ -4,11 +4,11 @@
     <section v-if="user !== undefined && onShortlistPage">
       <h2>Starred</h2>
       <ul class="shortlist">
-        <li v-for="listingID in user.starred"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+        <li v-for="listingID in user.starred" :key="listingID"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
       </ul>
       <h2>Accepted</h2>
       <ul class="shortlist">
-        <li v-for="listingID in user.accepted"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+        <li v-for="listingID in user.accepted" :key="listingID"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
       </ul>
     </section>
     <section v-if="!onShortlistPage && listing !== undefined">
@@ -23,10 +23,6 @@
         <li>
           <i class="material-icons"> directions_bike </i>
           {{listing.bikeCommuteMins}} minutes to work via bike
-        </li>
-        <li>
-          <i class="material-icons"> update </i>
-          Price last updated {{lastUpdatedDateString}}
         </li>
         <li>
           <i class="material-icons"> link </i>
@@ -117,9 +113,6 @@ export default Vue.extend({
   computed: {
     onShortlistPage(): boolean {
       return location.pathname === '/shortlist';
-    },
-    lastUpdatedDateString(): string {
-      return moment(this.listing?.priceHistory[0].date).format('L');
     }
   },
   mounted() {
