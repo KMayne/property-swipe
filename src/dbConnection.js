@@ -12,7 +12,7 @@ const mongoClient = new MongoClient(secrets.mongoDBConnectionString,
 module.exports.connect = async function () {
   logger.info('Connecting to database');
   await mongoClient.connect();
-  return mongoClient.db('property-swipe');
+  return mongoClient.db(process.env.NODE_ENV === 'development' ? 'ps-dev' : 'property-swipe');
 };
 
 module.exports.disconnect = function () {

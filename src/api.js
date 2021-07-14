@@ -35,8 +35,10 @@ router.get('/listings', async (req, res) => {
     $or: [ { available: { $exists: false } }, { available: { $eq: null } }, { available: { $lte: moveDate } } ],
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
-  // Most recently updated price, price low to high
-  }, { sort: { 'priceHistory.0.date': -1, price: 1 } });
+  }, {
+    //  Sort price high -> low
+    sort: { price: 1 }
+  });
   res.json(await nonSeenProperties.toArray());
 });
 

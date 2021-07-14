@@ -4,8 +4,6 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const history = require('connect-history-api-fallback');
-const { promisify } = require('util');
-const crypto = require('crypto');
 
 const dbConnection = require('./dbConnection');
 const importListings = require('./importer');
@@ -70,7 +68,7 @@ app.logger = logger;
 
 app.on('ready', () => {
   if (process.env.NODE_ENV === 'development') {
-    require('http').createServer(app).listen(3000, function () {
+    http.createServer(app).listen(3000, function () {
         console.info("Listening for HTTP on", this.address());
     });
   } else {
