@@ -67,4 +67,18 @@ app.use((err, req, res, _) => {
 
 app.logger = logger;
 
-app.on('ready', () => app.listen(3000, () => logger.info('Listening on port 3000')));
+app.on('ready', () => {
+  if (process.env.NODE_ENV === 'development') {
+    require('http').createServer(app).listen(3000, function () {
+        console.info("Listening for HTTP on", this.address());
+    });
+  } else {
+    require('greenlock-express')
+    .init({
+        packageRoot: __dirname,
+        maintainerEmail: "property-swipe@kianmayne.co.uk",
+        configDir: './greenlock.d',
+        cluster: false
+    }).serve(app);
+  }
+});
