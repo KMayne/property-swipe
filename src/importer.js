@@ -203,12 +203,12 @@ async function importListings(db) {
   logger.info(`Found ${listings.length} listings in total`);
   const listingsCol = db.collection('listings');
 
-  logger.info('Marking propeties not in the response as removed');
   const currentListingIDs = listings.map(listing => listing.listing_id);
-  await listingsCol.updateMany(
+  const result = await listingsCol.updateMany(
     { listingID: { $nin: currentListingIDs }, removed: false },
     { $set: { removed: true, removedDate: new Date() } }
   );
+  logger.info(`Marked ${result.modifiedCount} propeties not in the response as removed (${result.matchedCount} removed in total)`);
 
   logger.info('Processing listings & updating listing data in DB');
   await Promise.all(listings.map(async rawListing => {
