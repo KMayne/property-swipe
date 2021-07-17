@@ -35,12 +35,12 @@ router.get('/listings', async (req, res) => {
     $or: [ { available: { $exists: false } }, { available: { $eq: null } }, { available: { $lte: moveDate } } ],
     // Properties with at least 3 photos
     'photos.2': { $exists: true }
-  }, {
+  }, { sort: [
     //  Sort by proximity
-    transitCommuteMins: 1,
+    ['transitCommuteMins', 1],
     // then by price high -> low
-    price: -1
-  });
+    ['price', -1]
+  ]});
   res.json(await nonSeenProperties.toArray());
 });
 
