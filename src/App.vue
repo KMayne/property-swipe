@@ -214,6 +214,12 @@ html {
   margin-bottom: 16px;
 }
 
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+}
+
 img.photo {
   margin: auto;
   max-height: 60vh;
