@@ -70,7 +70,7 @@ import moment from 'moment';
 moment.locale('en-gb');
 
 interface Listing {
-  listingID: string;
+  listingID: number;
   price: number;
   summary: string;
   locality: string;
@@ -122,13 +122,16 @@ export default Vue.extend({
       return location.pathname === '/shortlist';
     },
     unavailableProperties(): Set<number> {
-      return new Set(this?.user.unavailable || []);
+      if (!this?.user?.available) return new Set();
+      return new Set(this.user.unavailable || []);
     },
     starredListingIds(): number[] {
-      return this?.user.starred.filter(id => !this.unavailableProperties.has(id)) || [];
+      if (!this?.user.starred) return [];
+      return this.user.starred.filter(id => this?.unavailableProperties == undefined || !this.unavailableProperties.has(id));
     },
     acceptedListingIds(): number[] {
-      return this?.user.accepted.filter(id => !this.unavailableProperties.has(id)) || [];
+      if (!this?.user.accepted) return [];
+      return this.user.accepted.filter(id => this?.unavailableProperties == undefined || !this.unavailableProperties.has(id)) || [];
     }
   },
   mounted() {
@@ -209,7 +212,11 @@ export default Vue.extend({
     },
     
     markUnavailable(listingID: number) {
-     if (this.user?.unavailable === undefined) this.user.unavailable = [];
+     if (this.user === undefined) {
+       alert(`Failed to mark ${listingID} as unavailable. Please refresh and try again.`);
+       return false;
+     }
+     if (this.user.unavailable === undefined) this.user.unavailable = [];
      this.user.unavailable.push(listingID);
      this.updateUser();
     },
