@@ -88,9 +88,10 @@ interface HistoricPrice {
 
 interface User {
   _id: string;
-  accepted: string[];
-  rejected: string[];
-  starred: string[];
+  accepted: number[];
+  rejected: number[];
+  starred: number[];
+  unavailable: number[];
   username: string;
 }
 
@@ -121,13 +122,13 @@ export default Vue.extend({
       return location.pathname === '/shortlist';
     },
     unavailableProperties(): Set<number> {
-      return new Set(this.user.unavailable || []);
+      return new Set(this?.user.unavailable || []);
     },
     starredListingIds(): number[] {
-      return this.user.starred.filter(id => !this.unavailableProperties.has(id));
+      return this?.user.starred.filter(id => !this.unavailableProperties.has(id)) || [];
     },
     acceptedListingIds(): number[] {
-      return this.user.accepted.filter(id => !this.unavailableProperties.has(id));
+      return this?.user.accepted.filter(id => !this.unavailableProperties.has(id)) || [];
     }
   },
   mounted() {
@@ -207,8 +208,8 @@ export default Vue.extend({
       this.prevListings.push(this.listing);
     },
     
-    markUnavailable(listingID) {
-     if (this.user.unavailable === undefined) this.user.unavailable = [];
+    markUnavailable(listingID: number) {
+     if (this.user?.unavailable === undefined) this.user.unavailable = [];
      this.user.unavailable.push(listingID);
      this.updateUser();
     },
