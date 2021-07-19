@@ -122,15 +122,15 @@ export default Vue.extend({
       return location.pathname === '/shortlist';
     },
     unavailableProperties(): Set<number> {
-      if (!this?.user?.available) return new Set();
+      if (!this?.user?.unavailable) return new Set();
       return new Set(this.user.unavailable || []);
     },
     starredListingIds(): number[] {
-      if (!this?.user.starred) return [];
+      if (!this?.user?.starred) return [];
       return this.user.starred.filter(id => this?.unavailableProperties == undefined || !this.unavailableProperties.has(id));
     },
     acceptedListingIds(): number[] {
-      if (!this?.user.accepted) return [];
+      if (!this?.user?.accepted) return [];
       return this.user.accepted.filter(id => this?.unavailableProperties == undefined || !this.unavailableProperties.has(id)) || [];
     }
   },
