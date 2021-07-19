@@ -4,11 +4,17 @@
     <section v-if="user !== undefined && onShortlistPage">
       <h2>Starred</h2>
       <ul class="shortlist">
-        <li v-for="listingID in user.starred" :key="listingID"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+        <li v-for="listingID in starredListingIds" :key="listingID">
+          <a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a>
+          <button @click="markUnavailable(listingID)">Mark unavailable</button>
+        </li>
       </ul>
       <h2>Accepted</h2>
       <ul class="shortlist">
-        <li v-for="listingID in user.accepted" :key="listingID"><a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a></li>
+        <li v-for="listingID in acceptedListingIds" :key="listingID">
+          <a :href="`https://www.zoopla.co.uk/to-rent/details/${listingID}`">{{listingID}}</a>
+          <button @click="markUnavailable(listingID)">Mark unavailable</button>
+        </li>
       </ul>
     </section>
     <section v-if="!onShortlistPage && listing !== undefined">
@@ -113,6 +119,15 @@ export default Vue.extend({
   computed: {
     onShortlistPage(): boolean {
       return location.pathname === '/shortlist';
+    },
+    unavailableProperties(): Set<number> {
+      return new Set(this.user.unavailable || []);
+    },
+    starredListingIds(): number[] {
+      return this.user.starred.filter(id => !this.unavailableProperties.has(id));
+    },
+    acceptedListingIds(): number[] {
+      return this.user.accepted.filter(id => !this.unavailableProperties.has(id));
     }
   },
   mounted() {
@@ -190,6 +205,12 @@ export default Vue.extend({
     saveState() {
       this.prevStates.push(JSON.parse(JSON.stringify(this.user)));
       this.prevListings.push(this.listing);
+    },
+    
+    markUnavailable(listingID) {
+     if (this.user.unavailable === undefined) this.user.unavailable = [];
+     this.user.unavailable.push(listingID);
+     this.updateUser();
     },
 
     updateUser() {
