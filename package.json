@@ -16,7 +16,7 @@
     "express": "^4.17.1",
     "greenlock-express": "^4.0.3",
     "jsdom": "^16.3.0",
-    "moment": "^2.27.0",
+    "moment": "^2.29.2",
     "mongodb": "^3.5.9",
     "node-fetch": "^2.6.1",
     "winston": "^3.3.3"
